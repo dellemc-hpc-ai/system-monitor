@@ -1,0 +1,5 @@
+2026-01-05 to 2026-01-07: mom/default_custody
+2026-01-08 to 2026-01-08: dad/thursday
+2026-01-09 to 2026-01-09: dad/no_school_day
+2026-01-10 to 2026-01-14: mom/default_custody
+2026-01-15 to 2026-01-15: dad/thursday

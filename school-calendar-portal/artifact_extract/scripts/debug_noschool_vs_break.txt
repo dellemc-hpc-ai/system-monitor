@@ -1,0 +1,15 @@
+2025-11-28 (Fri): _is_noschool_day=False, in_break=thanksgiving
+2025-12-26 (Fri): _is_noschool_day=False, in_break=christmas
+2026-01-02 (Fri): _is_noschool_day=False, in_break=christmas
+2026-03-20 (Fri): _is_noschool_day=False, in_break=spring
+2026-03-27 (Fri): _is_noschool_day=False, in_break=None
+2027-03-19 (Fri): _is_noschool_day=False, in_break=spring
+2027-03-26 (Fri): _is_noschool_day=True, in_break=None
+
+=== Christmas break dates ===
+2025-2026 Christmas: 2025-12-18 to 2026-01-02
+2026-2027 Christmas: 2026-12-18 to 2027-01-05
+
+=== Thanksgiving break ===
+2025-2026 Thanksgiving: 2025-11-24 to 2025-11-28
+2026-2027 Thanksgiving: 2026-11-23 to 2026-11-27

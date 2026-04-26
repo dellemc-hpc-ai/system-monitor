@@ -1,0 +1,273 @@
+{
+  "state": "TX",
+  "state_name": "Texas",
+  "note": "All rules derived from Texas Family Code §153.312, §153.313, §153.314, §153.315, §153.316, §153.317. No hard-coded assumptions.",
+  "distance_rules": {
+    "under_50": {
+      "statute": "153.312",
+      "description": "Parents reside 50 miles or less apart"
+    },
+    "50_to_100": {
+      "statute": "153.312_simplified",
+      "description": "Parents reside more than 50 but not more than 100 miles apart. Per §153.312, court may order simplified schedule."
+    },
+    "over_100": {
+      "statute": "153.313",
+      "description": "Parents reside more than 100 miles apart (§153.313: 'not less than 100 miles')"
+    }
+  },
+  "modes": {
+    "spo": {
+      "label": "Standard Possession Order",
+      "description": "§153.312 default — minimum baseline possession",
+      "weekend": {
+        "description": "§153.312(a)(1): Possessory conservator gets 1st/3rd/5th Friday of each month",
+        "pattern": "1st_3rd_5th_friday",
+        "start": {
+          "anchor": "friday_6pm",
+          "detail": "6pm on the 1st, 3rd, and 5th Friday of each month"
+        },
+        "end": {
+          "anchor": "sunday_6pm",
+          "detail": "6pm on the following Sunday"
+        },
+        "parent": "possessory",
+        "overrides_holiday": false
+      },
+      "thursday": {
+        "description": "§153.312(a)(2): Every Thursday during regular school term",
+        "start": {
+          "anchor": "thursday_6pm",
+          "detail": "6pm on each Thursday"
+        },
+        "end": {
+          "anchor": "thursday_8pm",
+          "detail": "8pm on the same Thursday"
+        },
+        "parent": "possessory",
+        "overnight": false,
+        "note": "Not overnight — child returned by 8pm same evening"
+      }
+    },
+    "espo": {
+      "label": "Extended Standard Possession Order",
+      "description": "§153.312 + §153.317(a)(2) election — extended Thursday overnight possession. This is NOT a separate statute; it is the SPO with an election under §153.317.",
+      "weekend": {
+        "description": "§153.312(a)(1) same as SPO",
+        "pattern": "1st_3rd_5th_friday",
+        "start": {
+          "anchor": "friday_school_dismissal",
+          "detail": "At time school is regularly dismissed on 1st/3rd/5th Friday"
+        },
+        "end": {
+          "anchor": "sunday_school_resumption",
+          "detail": "At time school resumes after the weekend"
+        },
+        "parent": "possessory",
+        "overrides_holiday": false
+      },
+      "thursday": {
+        "description": "§153.317(a)(2)(C): Extended — beginning at school dismissal Thu, ending at school resumption Fri",
+        "start": {
+          "anchor": "thursday_school_dismissal",
+          "detail": "Time school is regularly dismissed on Thursday"
+        },
+        "end": {
+          "anchor": "friday_school_resumption",
+          "detail": "Time school resumes on Friday"
+        },
+        "parent": "possessory",
+        "overnight": true,
+        "note": "This is the key difference from SPO — Thursday overnight possession"
+      }
+    }
+  },
+  "holidays": {
+    "thanksgiving": {
+      "statute_ref": "§153.314(3)",
+      "description": "Possessory conservator in odd years, managing conservator in even years. Period: 6pm the day school dismissed before Thanksgiving to 6pm the following Sunday.",
+      "start": {
+        "anchor": "6pm_day_before_thanksgiving_school_dismissal",
+        "detail": "6pm on the day school is dismissed for Thanksgiving"
+      },
+      "end": {
+        "anchor": "sunday_6pm_after_thanksgiving",
+        "detail": "6pm on the Sunday following Thanksgiving"
+      },
+      "alternation": {
+        "type": "odd_even_year",
+        "base": "calendar_year_of_break_start",
+        "note": "Year is determined by the calendar year in which the Thanksgiving break begins"
+      },
+      "odd_year": "possessory",
+      "even_year": "managing",
+      "split_into_halves": false,
+      "whole_period": true,
+      "note": "NOT split — the ENTIRE period belongs to one parent. This is a common misunderstanding."
+    },
+    "christmas": {
+      "statute_ref": "§153.314(1) and §153.314(2)",
+      "description": "Christmas possession split at noon on December 28. Odd years: possessory first half. Even years: managing first half.",
+      "split_point": {
+        "anchor": "december_28_noon",
+        "month": 12,
+        "day": 28,
+        "hour": 12,
+        "detail": "Noon on December 28"
+      },
+      "period1": {
+        "start": {
+          "anchor": "school_dismissal_christmas",
+          "detail": "Time school is dismissed for Christmas vacation"
+        },
+        "end": {
+          "anchor": "december_28_noon",
+          "detail": "Noon on December 28"
+        },
+        "label": "christmas_first_half"
+      },
+      "period2": {
+        "start": {
+          "anchor": "december_28_noon",
+          "detail": "Noon on December 28"
+        },
+        "end": {
+          "anchor": "day_before_school_resumes_after_christmas",
+          "detail": "Day before school resumes after Christmas vacation"
+        },
+        "label": "christmas_second_half"
+      },
+      "alternation": {
+        "type": "odd_even_year",
+        "base": "calendar_year_of_break_start",
+        "note": "Odd year = possessory first half. Year = calendar year when Christmas break begins."
+      },
+      "odd_year": {
+        "first_half": "possessory",
+        "second_half": "managing"
+      },
+      "even_year": {
+        "first_half": "managing",
+        "second_half": "possessory"
+      }
+    },
+    "spring_break": {
+      "statute_ref": "§153.312(b)(1)",
+      "description": "Possessory conservator gets spring break in even years, managing in odd years. Period: 6pm dismissal to 6pm day before school resumes.",
+      "start": {
+        "anchor": "school_dismissal_spring_vacation",
+        "detail": "Time school is dismissed for spring vacation"
+      },
+      "end": {
+        "anchor": "day_before_school_resumes_after_spring",
+        "detail": "6pm the day before school resumes"
+      },
+      "alternation": {
+        "type": "odd_even_year",
+        "base": "calendar_year_of_break_start"
+      },
+      "odd_year": "managing",
+      "even_year": "possessory"
+    },
+    "holiday_weekend_extended": {
+      "statute_ref": "§153.315(a)(b)",
+      "description": "When a weekend possession coincides with a Monday holiday, weekend extends to Monday 6pm. When it coincides with a Friday holiday, weekend extends BACK to Thursday 6pm.",
+      "monday_holiday": {
+        "rule": "Weekend possession extends to Monday 6pm (instead of Sunday 6pm)"
+      },
+      "friday_holiday": {
+        "rule": "Weekend possession begins at Thursday 6pm (extends BACK to Thursday)",
+        "applies_to": "both_spo_and_espo"
+      },
+      "note": "§153.315(b) extension applies when Friday is a holiday. For ESPO, since Thursday already has overnight possession, §153.315(b) means the Thursday possession starts at 6pm (from the normal Thursday start time) when Friday is a holiday."
+    },
+    "note": "Parents day (fathers_day, mothers_day) ALWAYS override all other holiday/break provisions, per Frank instruction."
+  },
+  "summer": {
+    "statute_ref": "§153.312(b)(2)",
+    "description": "Possessory conservator gets 30 consecutive days. If no April 1 written notice, days are July 1-31 (consecutive). Managing conservator gets all remaining summer days.",
+    "possessory_30_days": {
+      "default_start": {
+        "anchor": "july_1_6pm",
+        "detail": "July 1 at 6pm"
+      },
+      "default_end": {
+        "anchor": "july_30_6pm",
+        "detail": "July 30 at 6pm"
+      },
+      "notice_required": {
+        "date": "april_1",
+        "detail": "Written notice by April 1 required to specify custom periods",
+        "periods": "not more than 2 periods of at least 7 consecutive days each",
+        "note": "Without notice, default is July 1-30 (30 consecutive days)"
+      }
+    },
+    "remaining_days": {
+      "label": "summer_remainder",
+      "parent": "managing",
+      "start": {
+        "anchor": "day_after_possessory_ends",
+        "detail": "Day after possessory conservator's period ends"
+      },
+      "end": {
+        "anchor": "day_before_school_resumes",
+        "detail": "Day before school resumes"
+      },
+      "note": "ALL days from July 31 (or day after Dad's 30 days) through the day before school resumes belong to managing conservator (Mom)"
+    },
+    "before_possessory": {
+      "label": "summer_before_possessory",
+      "parent": "managing",
+      "note": "Days from school dismissal until Dad's July 1 start also belong to Mom"
+    }
+  },
+  "parents_day": {
+    "fathers_day": {
+      "statute_ref": "§153.314(5)",
+      "description": "Father gets possession beginning at 6pm on the Friday before Father's Day, ending at 6pm on Father's Day",
+      "start": {
+        "anchor": "friday_before_fathers_day_6pm",
+        "detail": "6pm on the Friday before Father's Day"
+      },
+      "end": {
+        "anchor": "fathers_day_6pm",
+        "detail": "6pm on Father's Day"
+      },
+      "parent": "father",
+      "overrides_weekend": true,
+      "overrides": "everything",
+      "note": "Per Frank instruction: fathers day overrides all other periods including summer break, spring break, christmas, thanksgiving"
+    },
+    "mothers_day": {
+      "statute_ref": "§153.314(6)",
+      "description": "Mother gets possession beginning at 6pm on the Friday before Mother's Day, ending at 6pm on Mother's Day",
+      "start": {
+        "anchor": "friday_before_mothers_day_6pm",
+        "detail": "6pm on the Friday before Mother's Day"
+      },
+      "end": {
+        "anchor": "mothers_day_6pm",
+        "detail": "6pm on Mother's Day"
+      },
+      "parent": "mother",
+      "overrides_weekend": true,
+      "condition": "Only applies if mother is not already in possession under another provision",
+      "overrides": "everything",
+      "note": "Per Frank instruction: mothers day overrides all other periods including spring break, christmas, thanksgiving"
+    }
+  },
+  "conservator_labels": {
+    "possessory": "dad",
+    "managing": "mom",
+    "father": "dad",
+    "mother": "mom"
+  },
+  "notes": [
+    "§153.312 applies to parents who reside 100 miles or less apart",
+    "§153.313 applies to parents who reside not less than 100 miles apart (≥100 miles)",
+    "ESPO is §153.312 + §153.317 election for extended times, NOT a separate statute",
+    "The 50-mile threshold mentioned in many commentaries is from §153.312's '50 miles or less' application — between 50-100 miles the court applies §153.312 with possible modifications",
+    "All times are expressed in the child's local time zone",
+    "Holidays override weekend and Thursday possession per §153.314"
+  ]
+}

@@ -1,0 +1,32 @@
+=== April 10, 2026 Debug ===
+Result: dad/no_school_day
+
+Step 4 (1st/3rd/5th Fri):
+  All April Fridays: [datetime.date(2026, 4, 3), datetime.date(2026, 4, 10), datetime.date(2026, 4, 17), datetime.date(2026, 4, 24)]
+  April 10 is 2th Friday
+  Qualifying (1/3/5)? False
+
+Step 4b (Non-qual Fri no-school):
+  Thu = 2026-04-09 (weekday=3)
+  Thu is Thursday? True
+  Thu is_noschool? False
+  Thu was_school = True
+  Fri is_noschool? False
+  Condition (noschool AND was_school)? False
+
+Step 5 (Regular school day):
+  April 10 weekday = 4 (4=Friday)
+  Friday rank = 2
+  Is qualifying (1/3/5)? False
+
+
+Context: April 7-15:
+  2026-04-07 (Tue): mom/default_custody
+  2026-04-08 (Wed): mom/default_custody
+  2026-04-09 (Thu): dad/thursday
+  2026-04-10 (Fri): dad/no_school_day
+  2026-04-11 (Sat): mom/default_custody
+  2026-04-12 (Sun): mom/default_custody
+  2026-04-13 (Mon): mom/default_custody
+  2026-04-14 (Tue): mom/default_custody
+  2026-04-15 (Wed): mom/default_custody

@@ -1,0 +1,18 @@
+
+=== 2025-2026 ===
+noschool_days type: <class 'list'>
+noschool_days count: 15
+First entry type: <class 'dict'>
+First entry keys: dict_keys(['date', 'label'])
+First entry: {'date': '2025-08-19', 'label': {'en': 'Student Holiday/Teacher Work Day', 'cn': ''}}
+
+schoolYears[0] keys: ['year', 'start', 'end', 'breaks', 'noschool_days']
+
+=== 2026-2027 ===
+noschool_days type: <class 'list'>
+noschool_days count: 12
+First entry type: <class 'dict'>
+First entry keys: dict_keys(['date', 'label'])
+First entry: {'date': '2026-09-04', 'label': {'en': 'Staff Dev / Student Holiday', 'cn': ''}}
+
+schoolYears[0] keys: ['year', 'start', 'end', 'breaks', 'noschool_days']

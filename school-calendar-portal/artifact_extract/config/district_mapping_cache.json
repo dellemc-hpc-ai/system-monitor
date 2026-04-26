@@ -1,0 +1,10 @@
+{
+  "_comment": "Address to district mapping cache. Populated by geocode_district module.",
+  "version": "1.0",
+  "mappings": {
+    "Glass Mountain Trl, Austin, TX": {
+      "district": "round rock isd",
+      "calendar_url": "https://www.roundrockisd.org/calendar"
+    }
+  }
+}

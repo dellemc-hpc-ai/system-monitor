@@ -1,0 +1,39 @@
+
+=== 2025-2026 ===
+All noschool_days entries:
+  2025-08-19: [+] Student Holiday/Teacher Work Day
+  2025-09-01: [-] Labor Day
+  2025-09-22: [+] Rosh Hashanah (Student & Staff Holiday)
+  2025-09-23: [+] Rosh Hashanah (Student & Staff Holiday)
+  2025-10-13: [+] Indigenous Peoples' Day / Columbus Day (Student Holiday)
+  2025-10-22: [-] Staff Development Day
+  2025-10-23: [-] Staff Development Day
+  2025-11-07: [+] Staff Dev / Student Holiday
+  2025-11-17: [+] Student Holiday/Staff Dev.
+  2026-01-19: [+] Martin Luther King Jr. Day (Student & Staff Holiday)
+  2026-01-21: [-] Last Day Second Semester/Teacher Work Day
+  2026-02-16: [+] Presidents' Day (Student & Staff Holiday)
+  2026-04-07: [+] Student Holiday/Staff Dev.
+  2026-04-17: [+] Student Holiday/Staff Dev.
+  2026-05-19: [-] Teacher Work Day
+
+=== 2026-2027 ===
+All noschool_days entries:
+  2026-09-04: [+] Staff Dev / Student Holiday
+  2026-09-07: [+] Labor Day (Student & Staff Holiday)
+  2026-09-21: [+] Yom Kippur (Student Holiday/Staff Dev)
+  2026-10-12: [+] Indigenous Peoples' Day / Columbus Day (Student Holiday)
+  2026-10-19: [+] Student & Staff Holiday
+  2026-11-09: [+] Diwali (Student Holiday/Staff Dev)
+  2027-01-18: [+] Martin Luther King Jr. Day (Student & Staff Holiday)
+  2027-02-15: [+] Presidents' Day (Student & Staff Holiday)
+  2027-03-10: [+] Eid al-Fitr (Student Holiday/Staff Dev)
+  2027-03-26: [+] Good Friday (Student & Staff Holiday)
+  2027-05-31: [+] Memorial Day (Staff Holiday/Student Holiday)
+  2027-06-19: [+] Juneteenth (Student Holiday)
+
+=== Key Fridays analysis ===
+2025-11-07: [+] 
+2026-04-17: [+] 
+2026-09-04: [+] 
+2027-03-26: [+] 
