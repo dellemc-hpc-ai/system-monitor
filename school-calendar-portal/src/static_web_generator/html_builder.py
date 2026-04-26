@@ -37,6 +37,7 @@ I18N = {
         "thanksgiving_second_half": "Mom - TG 2nd half",
         "christmas_first_half": "Dad - Xmas 1st half",
         "christmas_second_half": "Mom - Xmas 2nd half",
+        "christmas_split": "§153.314 Split Day · Noon Dec 28 custody exchange",
         "spring_break": "Spring Break",
         "summer_dad_30_days": "Dad Summer (Jul 1-30)",
         "summer_mom_before_dad": "Mom Summer (before Dad)",
@@ -81,6 +82,7 @@ I18N = {
         "thanksgiving_second_half": "妈妈 - 感恩节后半",
         "christmas_first_half": "爸爸 - 圣诞前半",
         "christmas_second_half": "妈妈 - 圣诞后半",
+        "christmas_split": "§153.314 固定交换日 · 中午 12:00 交换",
         "spring_break": "春假",
         "summer_dad_30_days": "爸爸暑假(7月1-30日)",
         "summer_mom_before_dad": "妈妈暑假(Dad前)",
@@ -126,6 +128,20 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .day.dad {{ background: #dbeafe; color: #1e40af; }}
   .day.mom {{ background: #fce7f3; color: #9d174d; }}
   .day.today {{ outline: 2px solid #333; outline-offset: -2px; font-weight: 700; }}
+  .day.split {{
+    display: flex !important;
+    flex-direction: column;
+    font-size: 0.65rem;
+    line-height: 1.1;
+    padding: 1px 2px;
+  }}
+  .day.split .am {{ border-radius: 4px 4px 0 0; flex: 1 1 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }}
+  .day.split .pm {{ border-radius: 0 0 4px 4px; flex: 1 1 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }}
+  .day.split .am.dad {{ background: #dbeafe; color: #1e40af; }}
+  .day.split .am.mom {{ background: #fce7f3; color: #9d174d; }}
+  .day.split .pm.dad {{ background: #bfdbfe; color: #1e40af; }}
+  .day.split .pm.mom {{ background: #fbcfe8; color: #9d174d; }}
+  .day.split .sep {{ height: 1px; background: rgba(0,0,0,0.25); width: 80%; }}
   .day:hover .tooltip {{ opacity: 1; visibility: visible; transform: translateY(0); }}
   .tooltip {{ position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%) translateY(4px); background: #333; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; white-space: nowrap; z-index: 200; opacity: 0; visibility: hidden; transition: 0.15s; pointer-events: none; text-align: center; }}
   .tooltip::after {{ content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #333; }}
@@ -133,6 +149,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .legend span {{ display: flex; align-items: center; gap: 6px; }}
   .legend .dad-swatch {{ width: 14px; height: 14px; border-radius: 3px; background: #dbeafe; border: 1px solid #1e40af; }}
   .legend .mom-swatch {{ width: 14px; height: 14px; border-radius: 3px; background: #fce7f3; border: 1px solid #9d174d; }}
+  .legend .split-swatch {{ width: 14px; height: 14px; border-radius: 3px; background: linear-gradient(to bottom, #dbeafe 50%, #fce7f3 50%); border: 1px solid #aaa; }}
   .footer {{ text-align: center; padding: 16px; color: #888; font-size: 0.8rem; }}
 </style>
 </head>
@@ -151,6 +168,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <div class="legend">
   <span><div class="dad-swatch"></div> {dad}</span>
   <span><div class="mom-swatch"></div> {mom}</span>
+  <span><div class="split-swatch"></div> <span id="splitLegend">{split_day_label}</span></span>
 </div>
 <div class="calendar-grid" id="calendar"></div>
 <div class="footer">TX Sec.153.314 -- {district} -- commit:{commit_hash}</div>
@@ -295,6 +313,7 @@ function renderMonth(year, month) {{
     const dateStr = fmtDate(cellDate);
     const custodian = queryCustodian(dateStr);
     const reason = queryLabel(dateStr);
+    const isDec28 = (year % 4 === 0 ? year : year) && month === 11 && d === 28;
 
     cell.className = 'day';
     if (custodian) cell.classList.add(custodian);
@@ -302,18 +321,48 @@ function renderMonth(year, month) {{
     if (year === today.getFullYear() && month === today.getMonth() && d === today.getDate()) {{
       cell.classList.add('today');
     }}
-    cell.textContent = d;
 
-    const tip = document.createElement('div');
-    tip.className = 'tooltip';
-    if (custodian) {{
-      const who = t[custodian];
-      const what = reason ? (t[reason] || reason) : who;
-      tip.textContent = who + ': ' + what;
+    // Dec 28: render as split cell (AM=first_parent, PM=second_parent)
+    if (isDec28 && reason && reason.includes('christmas')) {{
+      cell.className = 'day split';
+      cell.textContent = '';
+
+      // Find AM custodian: the custodian of the Christmas first-half interval
+      const amCustodian = custodian; // Dec 28 is last day of first half → same as custodian
+      const pmCustodian = amCustodian === 'dad' ? 'mom' : 'dad';
+
+      const amDiv = document.createElement('div');
+      amDiv.className = 'am ' + amCustodian;
+      amDiv.textContent = amCustodian === 'dad' ? t.dad : t.mom;
+
+      const sep = document.createElement('div');
+      sep.className = 'sep';
+
+      const pmDiv = document.createElement('div');
+      pmDiv.className = 'pm ' + pmCustodian;
+      pmDiv.textContent = pmCustodian === 'dad' ? t.dad : t.mom;
+
+      cell.appendChild(amDiv);
+      cell.appendChild(sep);
+      cell.appendChild(pmDiv);
+
+      const tip = document.createElement('div');
+      tip.className = 'tooltip';
+      tip.textContent = t['christmas_split'] || '§153.314 Split · Noon Dec 28';
+      cell.appendChild(tip);
     }} else {{
-      tip.textContent = dateStr;
+      cell.textContent = d;
+      const tip = document.createElement('div');
+      tip.className = 'tooltip';
+      if (custodian) {{
+        const who = t[custodian];
+        const what = reason ? (t[reason] || reason) : who;
+        tip.textContent = who + ': ' + what;
+      }} else {{
+        tip.textContent = dateStr;
+      }}
+      cell.appendChild(tip);
     }}
-    cell.appendChild(tip);
     grid.appendChild(cell);
   }}
 
@@ -330,6 +379,7 @@ document.getElementById('nextBtn').onclick = () => {{
 document.getElementById('langToggle').onclick = () => {{
   lang = lang === 'en' ? 'cn' : 'en';
   document.getElementById('title').textContent = I18N[lang].title;
+  document.getElementById('splitLegend').textContent = I18N[lang]['christmas_split'] || I18N['en']['christmas_split'];
   displayAllMonths();
 }};
 document.getElementById('espoBtn').onclick = () => {{
@@ -366,11 +416,14 @@ class HTMLBuilder:
 
     def build(self, dest):
         os.makedirs(os.path.dirname(dest), exist_ok=True)
+        split_label_en = I18N["en"].get("christmas_split", "§153.314 Split · Noon Dec 28")
+        split_label_cn = I18N["cn"].get("christmas_split", "§153.314 固定交换日 · 中午 12:00")
         html = HTML_TEMPLATE.format(
             district=self.district,
             title=I18N["en"]["title"],
             dad=I18N["en"]["dad"],
             mom=I18N["en"]["mom"],
+            split_day_label=split_label_en,
             commit_hash=get_git_commit(),
             espo_intervals_json=json.dumps(self.espo_intervals, ensure_ascii=False),
             spo_intervals_json=json.dumps(self.spo_intervals, ensure_ascii=False),
