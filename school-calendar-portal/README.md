@@ -133,12 +133,27 @@ Every custody rule comes from the statute template (`config/state_statute_templa
 | Weekend | 1st/3rd/5th Fri 6pm → Sun 6pm | Same, starts at school dismissal Fri |
 | Extended holidays | To Monday 6pm | To Monday 6pm, starting Thu |
 
-### Holiday Priority (checked top → bottom each day)
+### Holiday Priority (lowest number wins)
 
-1. **Parents Day** (Fathers/Mothers Day) — overrides everything
-2. **School breaks** (thanksgiving, christmas, spring, summer)
-3. **Regular school day** (Thursday → Dad, 1st/3rd/5th Friday → Dad)
-4. **Fallback** → Mom
+The system assigns a **priority** to every interval type. When a date falls in multiple intervals (e.g., both an ESPO Thursday and summer break), the interval with the **lower priority number** wins. This is the `date_winner` approach — clean, predictable, zero double-assignment.
+
+| Priority | Interval Type | Reason |
+|----------|--------------|--------|
+| 1 | `fathers_day`, `mothers_day` | Parent holidays — absolute top |
+| 2 | `spring_break` | Major school break |
+| 3 | `thanksgiving` | Major holiday break |
+| 4 | `christmas` | Major holiday break |
+| 5 | `summer_*` | Longest break of year |
+| 6 | `noschool_day` | Single-day no-school events |
+| 7 | `espo_thursday` | ESPO weekly Thursday |
+| 8 | `espo_weekend` | ESPO weekly Fri eve |
+| 9 | `mom_weekend` | Mom's weekend |
+| 10 | `regular_school_day` | Fallback — Dad's default day |
+
+**Key invariants:**
+- Priority 1–5 are school breaks; priority 6–10 are regular/repeating intervals
+- A date can never belong to two intervals — `date_winner` always picks exactly one
+- All 280+ intervals in a typical year are conflict-free by construction
 
 ### TX §153.314 Rules
 
