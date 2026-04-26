@@ -23,9 +23,10 @@ class CustodyInterval:
     end: date
     custodian: Literal["dad", "mom"]
     reason: str
+    priority: int = 10  # lower = higher priority; default to lowest
 
     def __repr__(self):
-        return f"CustodyInterval({self.start}->{self.end}, {self.custodian}, {self.reason})"
+        return f"CustodyInterval({self.start}->{self.end}, {self.custodian}, {self.reason}, p={self.priority})"
 
 
 class IntervalList:
@@ -170,7 +171,7 @@ class CustodyIntervalGenerator:
             parent = h_rules.get("odd_year_parent", "dad")
         else:
             parent = h_rules.get("even_year_parent", "mom")
-        return [CustodyInterval(start_d, end_d, parent, "thanksgiving")]
+        return [CustodyInterval(start_d, end_d, parent, "thanksgiving", priority=3)]
 
     def _christmas_intervals(self, sy: SchoolYear):
         """
@@ -216,8 +217,8 @@ class CustodyIntervalGenerator:
         first_parent = "dad" if is_even else "mom"
         second_parent = "mom" if is_even else "dad"
         return [
-            CustodyInterval(start_d, split_date, first_parent, "christmas_first_half"),
-            CustodyInterval(split_date + timedelta(days=1), end_d, second_parent, "christmas_second_half"),
+            CustodyInterval(start_d, split_date, first_parent, "christmas_first_half", priority=4),
+            CustodyInterval(split_date + timedelta(days=1), end_d, second_parent, "christmas_second_half", priority=4),
         ]
 
     def _spring_break_intervals(self, sy: SchoolYear):
@@ -228,9 +229,9 @@ class CustodyIntervalGenerator:
         end_d = date.fromisoformat(br.end)
         h_rules = self.rules.get("holidays", {}).get("spring_break", {})
         parent = h_rules.get("odd_year_parent" if self._is_odd_year(start_d) else "even_year_parent", "dad")
-        return [CustodyInterval(start_d, end_d, parent, "spring_break")]
+        return [CustodyInterval(start_d, end_d, parent, "spring_break", priority=2)]
 
-    def _summer_intervals(self, sy: SchoolYear, holiday_dates: set = None):
+    def _summer_intervals(self, sy: SchoolYear):
         """
         Summer: Dad gets 30 consecutive days (default July 1-30).
         Configurable via custody_rules.
@@ -271,14 +272,12 @@ class CustodyIntervalGenerator:
             custom = summer_rule.get("custom_range", {})
             dad_start = date(summer_start_custody.year, int(custom.get("start_month", 7)), int(custom.get("start_day", 1)))
             dad_end = date(summer_start_custody.year, int(custom.get("end_month", 7)), int(custom.get("end_day", 30)))
-        holiday_dates = holiday_dates or set()
         intervals = []
         if summer_start_custody <= dad_start:
             pre = []
             d = summer_start_custody
             while d < dad_start:
-                if d not in holiday_dates:
-                    pre.append(d)
+                pre.append(d)
                 d += timedelta(days=1)
             if pre:
                 g_start = g_end = pre[0]
@@ -286,10 +285,10 @@ class CustodyIntervalGenerator:
                     if rd == g_end + timedelta(days=1):
                         g_end = rd
                     else:
-                        intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_before_dad"))
+                        intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_before_dad", priority=5))
                         g_start = g_end = rd
-                intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_before_dad"))
-        intervals.append(CustodyInterval(dad_start, dad_end, dad_parent, "summer_dad_30_days"))
+                intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_before_dad", priority=5))
+        intervals.append(CustodyInterval(dad_start, dad_end, dad_parent, "summer_dad_30_days", priority=5))
         # Extend mom_after_dad to cover Aug 12 - (school_start - 1), since no school on those days
         # and they fall between summer break end and the next school year start
         # Extend mom_after_dad to cover Aug 12 - (school_start_next - 1)
@@ -308,8 +307,7 @@ class CustodyIntervalGenerator:
             remainder = []
             d = remainder_start
             while d <= remainder_end:
-                if d not in holiday_dates:
-                    remainder.append(d)
+                remainder.append(d)
                 d += timedelta(days=1)
             if remainder:
                 g_start = g_end = remainder[0]
@@ -317,9 +315,9 @@ class CustodyIntervalGenerator:
                     if rd == g_end + timedelta(days=1):
                         g_end = rd
                     else:
-                        intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_after_dad"))
+                        intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_after_dad", priority=5))
                         g_start = g_end = rd
-                intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_after_dad"))
+                intervals.append(CustodyInterval(g_start, g_end, "mom", "summer_mom_after_dad", priority=5))
         return intervals
 
     def _fathers_day_intervals(self, sy: SchoolYear):
@@ -337,7 +335,7 @@ class CustodyIntervalGenerator:
             return []
         # §153.314: Dad gets Father's Day regardless of school year
         fri = fathers_day - timedelta(days=2)
-        return [CustodyInterval(fri, fathers_day, "dad", "fathers_day")]
+        return [CustodyInterval(fri, fathers_day, "dad", "fathers_day", priority=1)]
 
     def _mothers_day_intervals(self, sy: SchoolYear):
         sy_year = int(sy.year.split("-")[1])
@@ -357,10 +355,15 @@ class CustodyIntervalGenerator:
         if not (school_start <= mothers_day <= school_end):
             return []
         fri = mothers_day - timedelta(days=2)
-        return [CustodyInterval(fri, mothers_day, "mom", "mothers_day")]
+        return [CustodyInterval(fri, mothers_day, "mom", "mothers_day", priority=1)]
 
-    def _noschool_intervals(self, sy: SchoolYear, exclusions: set = None, prior_result: 'IntervalList' = None) -> list:
-        exclusions = exclusions or set()
+    def _noschool_intervals(self, sy: SchoolYear) -> list:
+        """
+        Standalone noschool days (not inside a major break).
+        Each standalone noschool day gets priority 6 and inherits custodian
+        from the previous day's winner (date_winner lookup happens in generate()).
+        """
+        # Build break_dates to identify standalone noschool days
         break_dates = set()
         for br in sy.breaks.values():
             d = date.fromisoformat(br.start)
@@ -368,100 +371,75 @@ class CustodyIntervalGenerator:
             while d <= end_d:
                 break_dates.add(d)
                 d += timedelta(days=1)
+
         standalone = []
         for nd in sy.noschool_days:
             nd_date = date.fromisoformat(nd.date)
-            if nd_date not in break_dates and nd_date not in exclusions:
+            if nd_date not in break_dates:
                 standalone.append(nd_date)
+
         if not standalone:
             return []
+
         standalone.sort()
         ns_rules = self.rules.get("noschool_days", {})
+        default_parent = ns_rules.get("default_parent", "dad")
 
-        def get_custodian_for(d: date) -> str:
-            # Rollover rule (primary): noschool day inherits previous day's custodian.
-            # This reflects Texas §153.312 intent: no-school days are extensions of
-            # the preceding custody period, not independent odd/even switches.
-            if prior_result is not None:
-                prev_iv = prior_result.query(d - timedelta(days=1))
-                if prev_iv is not None:
-                    return prev_iv.custodian
-            # Fallback only when no prior interval exists (shouldn't happen in practice)
-            return ns_rules.get("default_parent", "dad")
+        # This will be set by generate() before calling this method, via a shared dict.
+        # If not set, fall back to default.
+        date_winner = getattr(self, '_date_winner', None)
+
+        def custodian_for(d: date) -> str:
+            if date_winner is not None and d in date_winner:
+                return date_winner[d].custodian
+            return default_parent
 
         intervals = []
         group_start = group_end = standalone[0]
-        custodian = get_custodian_for(group_start)
+        custodian = custodian_for(group_start)
         for d in standalone[1:]:
-            if d == group_end + timedelta(days=1):
+            if d == group_end + timedelta(days=1) and custodian_for(d) == custodian:
                 group_end = d
             else:
-                intervals.append(CustodyInterval(group_start, group_end, custodian, "noschool_day"))
+                intervals.append(CustodyInterval(group_start, group_end, custodian, "noschool_day", priority=6))
                 group_start = group_end = d
-                custodian = get_custodian_for(group_start)
-        intervals.append(CustodyInterval(group_start, group_end, custodian, "noschool_day"))
+                custodian = custodian_for(group_start)
+        intervals.append(CustodyInterval(group_start, group_end, custodian, "noschool_day", priority=6))
         return intervals
 
     # ── Regular school day intervals ─────────────────────────────────────────
 
-    def _regular_school_intervals(self, sy: SchoolYear, special_dates: set = None):
+    def _regular_school_intervals(self, sy: SchoolYear):
         """
-        Regular school days (Mon-Fri, no holidays/breaks).
-        Reads weekend pattern and Thursday rule from custody_rules JSON.
-        ESPO & SPO: 1st/3rd/5th Friday weekends, with Thursday for ESPO
+        Regular school days (Mon-Fri, not in any break or holiday).
+        Priority 10 — lowest priority, always loses to other rules.
         """
         school_start = date.fromisoformat(sy.start)
         school_end = date.fromisoformat(sy.end)
-        special_dates = special_dates or set()
-        # Add all break periods to special_dates so last-day-of-school is not a regular school day
-        for br in sy.breaks.values():
-            d = date.fromisoformat(br.start)
-            end = date.fromisoformat(br.end)
-            while d <= end:
-                special_dates.add(d)
-                d += timedelta(days=1)
-        # The last day of school (school_end) is excluded from regular school days
-        # because it belongs to the summer custody period (per TX §153.314)
-        special_dates.add(school_end)
-
-        weekend_rule = self.rules.get("weekend", {})
-        pattern = weekend_rule.get("pattern", "1st_3rd_5th_friday")
-        weekend_parent = weekend_rule.get("parent", "dad")
 
         intervals = []
         d = school_start
         while d <= school_end:
-            if d not in special_dates and d.weekday() < 5:
-                intervals.append(CustodyInterval(d, d, "mom", "regular_school_day"))
+            if d.weekday() < 5:
+                intervals.append(CustodyInterval(d, d, "mom", "regular_school_day", priority=10))
             d += timedelta(days=1)
         return intervals
 
     # ── Weekend / Thursday intervals ──────────────────────────────────────────
 
-    def _weekend_thursday_intervals(self, sy: SchoolYear, special_dates: set = None):
+    def _weekend_thursday_intervals(self, sy: SchoolYear):
         """
         Weekend (Fri-Mon or 1st/3rd/5th Sat-Sun) and Thursday intervals.
         Pattern is read from custody_rules JSON.
         """
         school_start = date.fromisoformat(sy.start)
         school_end = date.fromisoformat(sy.end)
-        special_dates = special_dates or set()
-        for br in sy.breaks.values():
-            d = date.fromisoformat(br.start)
-            end_d = date.fromisoformat(br.end)
-            while d <= end_d:
-                special_dates.add(d)
-                d += timedelta(days=1)
-        # Exclude the last day of school — it belongs to summer custody (per TX §153.314),
-        # not to ESPO Thursday or regular school day intervals
-        special_dates.add(school_end)
 
         weekend_rule = self.rules.get("weekend", {})
         thursday_rule = self.rules.get("thursday", {})
         pattern = weekend_rule.get("pattern", "1st_3rd_5th_friday")
         weekend_parent = weekend_rule.get("parent", "dad")
         thursday_parent = thursday_rule.get("parent", "dad")
-
 
         intervals = []
         d_iter = school_start
@@ -476,8 +454,8 @@ class CustodyIntervalGenerator:
                 # Thursdays
                 for day in range(1, last_day + 1):
                     thursday = date(year, month, day)
-                    if thursday.weekday() == 3 and school_start <= thursday <= school_end and thursday not in special_dates:
-                        intervals.append(CustodyInterval(thursday, thursday, thursday_parent, "espo_thursday"))
+                    if thursday.weekday() == 3 and school_start <= thursday <= school_end:
+                        intervals.append(CustodyInterval(thursday, thursday, thursday_parent, "espo_thursday", priority=7))
                 # 1st, 3rd, 5th Friday weekends (Fri → Sun)
                 fridays = []
                 for day in range(1, last_day + 1):
@@ -489,9 +467,7 @@ class CustodyIntervalGenerator:
                         fri = fridays[fri_idx]
                         sat = fri + timedelta(days=1)
                         sun = fri + timedelta(days=2)
-                        if fri in special_dates or sat in special_dates or sun in special_dates:
-                            continue
-                        intervals.append(CustodyInterval(fri, sun, weekend_parent, "espo_weekend"))
+                        intervals.append(CustodyInterval(fri, sun, weekend_parent, "espo_weekend", priority=8))
 
             # Move to next month
             if month == 12:
@@ -501,15 +477,14 @@ class CustodyIntervalGenerator:
 
         return intervals
 
-    def _mom_weekend_intervals(self, sy: SchoolYear, holiday_dates: set = None) -> list:
+    def _mom_weekend_intervals(self, sy: SchoolYear) -> list:
         """
         Mom gets the 2nd and 4th weekends (Sat+Sun) during the school year.
-        This fills the gaps left by Dad's 1st/3rd/5th ESPO weekends.
-        Skip if the Saturday falls within a holiday break (Thanksgiving, Christmas, Spring).
+        Priority-based: wins over ESPO weekends (priority 8) but loses to all
+        major holidays (priority 2-4).
         """
         school_start = date.fromisoformat(sy.start)
         school_end = date.fromisoformat(sy.end)
-        holiday_dates = holiday_dates or set()
 
         intervals = []
         d_iter = school_start
@@ -533,14 +508,11 @@ class CustodyIntervalGenerator:
                 sat = fri + timedelta(days=1)
                 sun = fri + timedelta(days=2)
 
-                # Skip if Saturday is in a holiday break period
-                if sat in holiday_dates:
-                    continue
                 # Skip if Saturday is outside school year
                 if not (school_start <= sat <= school_end):
                     continue
 
-                intervals.append(CustodyInterval(sat, sun, "mom", "mom_weekend"))
+                intervals.append(CustodyInterval(sat, sun, "mom", "mom_weekend", priority=9))
 
             # Move to next month
             if month == 12:
@@ -553,47 +525,84 @@ class CustodyIntervalGenerator:
     # ── Master generator ────────────────────────────────────────────────────
 
     def generate(self) -> IntervalList:
+        """
+        Priority-based interval generation.
+
+        All candidate intervals are collected first (no exclusion logic),
+        then for each date the interval with the lowest priority number wins.
+        Consecutive dates with the same custodian+reason are merged.
+
+        Priority order (lower = higher priority):
+          1  fathers_day, mothers_day
+          2  spring_break
+          3  thanksgiving
+          4  christmas_first_half, christmas_second_half
+          5  summer (all three segments)
+          6  noschool_day         -- inherits custodian from date_winner
+          7  espo_thursday
+          8  espo_weekend
+          9  mom_weekend
+          10 regular_school_day
+        """
         result = IntervalList()
         for sy in self.calendar.school_years:
-            holiday_dates = set()
-            for iv in self._fathers_day_intervals(sy) + self._mothers_day_intervals(sy):
+            # ── Pass 1: all intervals EXCEPT noschool_day ─────────────────────
+            all_candidates: list[CustodyInterval] = []
+            all_candidates += self._fathers_day_intervals(sy)
+            all_candidates += self._mothers_day_intervals(sy)
+            all_candidates += self._thanksgiving_intervals(sy)
+            all_candidates += self._christmas_intervals(sy)
+            all_candidates += self._spring_break_intervals(sy)
+            all_candidates += self._summer_intervals(sy)
+            all_candidates += self._weekend_thursday_intervals(sy)
+            all_candidates += self._mom_weekend_intervals(sy)
+            all_candidates += self._regular_school_intervals(sy)
+
+            # Build date_winner map from pass-1 candidates
+            date_winner: dict[date, CustodyInterval] = {}
+            for iv in all_candidates:
                 d = iv.start
                 while d <= iv.end:
-                    holiday_dates.add(d)
+                    existing = date_winner.get(d)
+                    if existing is None or iv.priority < existing.priority:
+                        date_winner[d] = iv
                     d += timedelta(days=1)
 
-            result.extend(self._fathers_day_intervals(sy))
-            result.extend(self._mothers_day_intervals(sy))
-            result.extend(self._thanksgiving_intervals(sy))
-            result.extend(self._christmas_intervals(sy))
-            result.extend(self._spring_break_intervals(sy))
+            # ── Pass 2: noschool_day intervals (need date_winner to inherit custodian) ──
+            self._date_winner = date_winner   # share with _noschool_intervals via self
+            noschool_intervals = self._noschool_intervals(sy)
+            del self._date_winner               # clean up instance attribute
 
-            # Summer intervals: must be added BEFORE wt_intervals so that
-            # - the last school day inherits summer custodian (not Thursday ESPO)
-            # - Sat/Sun of Mom 2nd/4th weekends that fall within summer are skipped
-            result.extend(self._summer_intervals(sy, holiday_dates))
-
-            # Dad's ESPO weekends and Thursdays (1st/3rd/5th Friday + Thursday)
-            wt_intervals = self._weekend_thursday_intervals(sy, holiday_dates)
-            wt_dates = set()
-            for iv in wt_intervals:
+            # Add noschool candidates to date_winner (they may override regular_school_day p=10)
+            for iv in noschool_intervals:
                 d = iv.start
                 while d <= iv.end:
-                    wt_dates.add(d)
+                    existing = date_winner.get(d)
+                    if existing is None or iv.priority < existing.priority:
+                        date_winner[d] = iv
                     d += timedelta(days=1)
-            result.extend(wt_intervals)
 
-            # Mom's 2nd and 4th weekends fill the gaps (added AFTER Dad's intervals
-            # so they only apply when Dad doesn't have that weekend)
-            mom_wk_intervals = self._mom_weekend_intervals(sy, holiday_dates)
-            result.extend(mom_wk_intervals)
+            # ── Merge consecutive dates with same custodian+reason+priority ──────
+            if not date_winner:
+                continue
+            sorted_dates = sorted(date_winner.keys())
+            cur_start = cur_end = sorted_dates[0]
+            cur_custodian = date_winner[cur_start].custodian
+            cur_reason = date_winner[cur_start].reason
+            cur_priority = date_winner[cur_start].priority
 
-            result.extend(self._noschool_intervals(sy, wt_dates, result))
-
-            special = set(holiday_dates)
-            special.update(wt_dates)
-            special.update(self._no_school_dates)
-            result.extend(self._regular_school_intervals(sy, special))
+            for d in sorted_dates[1:]:
+                iv = date_winner[d]
+                if (iv.custodian == cur_custodian and iv.reason == cur_reason
+                        and iv.priority == cur_priority and d == cur_end + timedelta(days=1)):
+                    cur_end = d
+                else:
+                    result.append(CustodyInterval(cur_start, cur_end, cur_custodian, cur_reason, cur_priority))
+                    cur_start = cur_end = d
+                    cur_custodian = iv.custodian
+                    cur_reason = iv.reason
+                    cur_priority = iv.priority
+            result.append(CustodyInterval(cur_start, cur_end, cur_custodian, cur_reason, cur_priority))
 
         return result
 
