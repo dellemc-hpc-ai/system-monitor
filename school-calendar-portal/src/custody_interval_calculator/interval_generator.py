@@ -228,7 +228,10 @@ class CustodyIntervalGenerator:
         start_d = date.fromisoformat(br.start)
         end_d = date.fromisoformat(br.end)
         h_rules = self.rules.get("holidays", {}).get("spring_break", {})
-        parent = h_rules.get("odd_year_parent" if self._is_odd_year(start_d) else "even_year_parent", "dad")
+        # Per statute template alternation.base="calendar_year_of_break_start":
+        # Spring break in 2026 (even) -> even_year_parent=dad
+        # Spring break in 2025 (odd)  -> odd_year_parent=mom
+        parent = h_rules.get("odd_year_parent" if start_d.year % 2 == 1 else "even_year_parent", "dad")
         return [CustodyInterval(start_d, end_d, parent, "spring_break", priority=2)]
 
     def _summer_intervals(self, sy: SchoolYear):
