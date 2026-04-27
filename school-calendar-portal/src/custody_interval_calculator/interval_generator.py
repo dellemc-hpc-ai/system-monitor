@@ -360,8 +360,11 @@ class CustodyIntervalGenerator:
     def _noschool_intervals(self, sy: SchoolYear) -> list:
         """
         Standalone noschool days (not inside a major break).
-        Each standalone noschool day gets priority 6 and inherits custodian
-        from the previous day's winner (date_winner lookup happens in generate()).
+        Texas §153.315(b): possession continues until school resumes.
+        Consecutive noschool days extend the preceding custodian's possession
+        through all of them (until school is in session again).
+
+        Priority 6 — wins over regular school days (p=10) and weekends (p=8/9).
         """
         # Build break_dates to identify standalone noschool days
         break_dates = set()
@@ -385,25 +388,45 @@ class CustodyIntervalGenerator:
         ns_rules = self.rules.get("noschool_days", {})
         default_parent = ns_rules.get("default_parent", "dad")
 
-        # This will be set by generate() before calling this method, via a shared dict.
-        # If not set, fall back to default.
+        # date_winner is set by generate() before calling this method (Pass 1 result).
+        # This maps calendar dates to the Pass-1 winner (weekends, holidays, etc.)
         date_winner = getattr(self, '_date_winner', None)
 
         def custodian_for(d: date) -> str:
+            """
+            Look up custodian for date d from Pass-1 winners.
+            Used to find the custodian of the day BEFORE a noschool period.
+            """
             if date_winner is not None and d in date_winner:
                 return date_winner[d].custodian
             return default_parent
 
+        def predecessor_custodian(nd_date: date) -> str:
+            """
+            §153.315(b): Find custodian of the day immediately before a noschool
+            period starts. This implements 'possession continues until school resumes'.
+
+            - For the first noschool day: look at nd_date - 1 (the preceding calendar day)
+            - For subsequent consecutive noschool days: use the same custodian as
+              the previous day in the noschool group (already determined by predecessor)
+            """
+            prev_day = nd_date - timedelta(days=1)
+            return custodian_for(prev_day)
+
         intervals = []
         group_start = group_end = standalone[0]
-        custodian = custodian_for(group_start)
+        # §153.315(b): first noschool day inherits from the preceding calendar day
+        custodian = predecessor_custodian(group_start)
+
         for d in standalone[1:]:
-            if d == group_end + timedelta(days=1) and custodian_for(d) == custodian:
+            if d == group_end + timedelta(days=1):
+                # Consecutive noschool: carry forward the §153.315(b) custodian
                 group_end = d
             else:
+                # Gap: new noschool period, reapply §153.315(b) from new predecessor
                 intervals.append(CustodyInterval(group_start, group_end, custodian, "noschool_day", priority=6))
                 group_start = group_end = d
-                custodian = custodian_for(group_start)
+                custodian = predecessor_custodian(group_start)
         intervals.append(CustodyInterval(group_start, group_end, custodian, "noschool_day", priority=6))
         return intervals
 
