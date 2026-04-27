@@ -60,6 +60,7 @@ def convert_rules_to_standard_format(rules: dict, mode: str) -> dict:
                 "spring_break": {
                     "odd_year_parent": holidays.get("spring_break", {}).get("odd_year"),
                     "even_year_parent": holidays.get("spring_break", {}).get("even_year"),
+                    "whole_period": holidays.get("spring_break", {}).get("whole_period", True),
                 },
             },
             "summer": {
@@ -90,6 +91,7 @@ def convert_rules_to_standard_format(rules: dict, mode: str) -> dict:
                 "spring_break": {
                     "odd_year_parent": holidays.get("spring_break", {}).get("odd_year"),
                     "even_year_parent": holidays.get("spring_break", {}).get("even_year"),
+                    "whole_period": holidays.get("spring_break", {}).get("whole_period", True),
                 },
             },
             "summer": {

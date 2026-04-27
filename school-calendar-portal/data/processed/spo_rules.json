@@ -43,7 +43,8 @@
     "spring_break": {
       "alternation": true,
       "odd_year": "mom",
-      "even_year": "dad"
+      "even_year": "dad",
+      "whole_period": true
     },
     "holiday_extended": {
       "monday_holiday_extends_to_monday": true,

@@ -153,6 +153,7 @@ def build_custody_rules(
         "alternation": True,
         "odd_year": managing_label,
         "even_year": possessory_label,
+        "whole_period": sb.get("whole_period", True),
     }
 
     # Holiday weekend extension (§153.315)

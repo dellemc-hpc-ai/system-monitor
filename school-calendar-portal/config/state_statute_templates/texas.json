@@ -167,7 +167,9 @@
         "base": "calendar_year_of_break_start"
       },
       "odd_year": "managing",
-      "even_year": "possessory"
+      "even_year": "possessory",
+      "whole_period": true,
+      "note": "NOT split — the ENTIRE period belongs to one parent, alternating by year."
     },
     "holiday_weekend_extended": {
       "statute_ref": "§153.315(a)(b)",
