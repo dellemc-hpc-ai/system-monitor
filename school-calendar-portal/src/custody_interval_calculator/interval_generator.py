@@ -248,9 +248,21 @@ class CustodyIntervalGenerator:
         # Spring break in 2026 (even) -> even_year_parent=dad
         # Spring break in 2025 (odd)  -> odd_year_parent=mom
         parent = h_rules.get("odd_year_parent" if br_start.year % 2 == 1 else "even_year_parent", "dad")
-        # custody_end = br_end (last day of spring break = day before school resumes)
-        # The statute says "6pm the day before school resumes." br_end is that day.
-        custody_end = br_end
+        # custody_end = day before school resumes (NOT br_end).
+        # br_end = district's last day of spring break.
+        # schoolResumes = first weekday on/after (br_end + 1 day).
+        # custody_end = schoolResumes - 1 calendar day.
+        # e.g., 2026: br_end=3/20 (Fri), schoolResumes=3/23 (Mon) -> custody_end=3/22 (Sun)
+        # e.g., 2027: br_end=3/19 (Thu), schoolResumes=3/22 (Mon) -> custody_end=3/21 (Sun)
+        candidate = br_end + timedelta(days=1)
+        while candidate.weekday() >= 5:  # skip Sat(5) Sun(6)
+            candidate += timedelta(days=1)
+        if self._no_school_dates:
+            while candidate in self._no_school_dates:
+                candidate += timedelta(days=1)
+                while candidate.weekday() >= 5:
+                    candidate += timedelta(days=1)
+        custody_end = candidate - timedelta(days=1)
         return [CustodyInterval(custody_start, custody_end, parent, "spring_break", priority=2)]
 
     def _summer_intervals(self, sy: SchoolYear):
