@@ -615,12 +615,12 @@
     },
     {
       "start": "2026-03-13",
-      "end": "2026-03-19",
+      "end": "2026-03-20",
       "custodian": "dad",
       "reason": "spring_break"
     },
     {
-      "start": "2026-03-20",
+      "start": "2026-03-21",
       "end": "2026-03-22",
       "custodian": "dad",
       "reason": "espo_weekend"
@@ -1407,12 +1407,12 @@
     },
     {
       "start": "2027-03-12",
-      "end": "2027-03-18",
+      "end": "2027-03-19",
       "custodian": "mom",
       "reason": "spring_break"
     },
     {
-      "start": "2027-03-19",
+      "start": "2027-03-20",
       "end": "2027-03-21",
       "custodian": "dad",
       "reason": "espo_weekend"
