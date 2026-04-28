@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 """
 Pollen Report Scraper - Linux Version
-Auto-detects location via IP geolocation, falls back to Austin TX defaults.
+Geocodes a street address via Nominatim (OpenStreetMap) to get lat/lng/zip,
+then fetches pollen data from AccuWeather + pollen.com.
 
 Data sources:
   1. GPS (pollencount.app / AccuWeather): lat/lng based
-  2. ZIP  (pollen.com via CDP): species-level data for detected or default ZIP
+  2. ZIP  (pollen.com via CDP): species-level data for the resolved ZIP code
 
 Usage:
-  python3 scrape.py [--output FILE] [--html FILE]
+  python3 scrape.py [--address "10625 Glass Mountain Trl, Austin TX 78750"]
+  python3 scrape.py --detect-ip        # use IP-based detection instead of address
+  python3 scrape.py --output FILE --html FILE
   python3 scrape.py --test
 """
 
@@ -18,28 +21,75 @@ import os
 import subprocess
 import sys
 import urllib.request
+import urllib.parse
 from datetime import datetime
 
-# ─── Defaults (Austin TX 78750) ─────────────────────────────────────────────────
+# ─── Defaults ─────────────────────────────────────────────────────────────────────
+DEFAULT_ADDRESS = "10625 Glass Mountain Trl, Austin TX 78750"
 DEFAULT_LAT = 30.4403525
 DEFAULT_LNG = -97.81407276
 DEFAULT_ZIP = "78750"
 DEFAULT_CITY = "Austin, TX 78750"
-DEFAULT_SOURCE_NAME = "pollencount.app (10625 Glass Mountain)"
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 OUTPUT_JSON = os.path.join(DATA_DIR, "pollen-data.json")
 DEFAULT_HTML = os.path.join(DATA_DIR, "today.html")
 ZIP_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pollen_com_cdp.py")
 
-AQI_API = "https://api.waqi.info/feed/geo:30.4403;-97.814/?token=demo"
+
+# ─── Address Geocoding ──────────────────────────────────────────────────────────
+
+def geocode_address(address):
+    """Convert a street address to lat/lng/zip via Nominatim (OpenStreetMap).
+    Returns dict with lat, lng, zip, city, display_name on success; None on failure.
+    Rate-limited: max 1 req/sec (Nominatim policy).
+    """
+    try:
+        url = "https://nominatim.openstreetmap.org/search?" + urllib.parse.urlencode({
+            "q": address,
+            "format": "json",
+            "limit": "1",
+            "addressdetails": "1",
+        })
+        req = urllib.request.Request(url, headers={"User-Agent": "PollenReport/1.0 (linux)"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            results = json.loads(resp.read().decode())
+        if not results:
+            print(f"[Geocode] No results for: {address}")
+            return None
+        r = results[0]
+        lat = float(r["lat"])
+        lng = float(r["lon"])
+        addr = r.get("address", {})
+        # Prefer postcode from Nominatim, fallback to "zip" from addressdetails
+        zip_code = (
+            addr.get("postcode")
+            or addr.get("zip")
+            or (DEFAULT_ZIP if DEFAULT_ADDRESS == address else "")
+        )
+        # Build display city
+        city_parts = [
+            addr.get("city"),
+            addr.get("town"),
+            addr.get("village"),
+            addr.get("municipality"),
+            addr.get("county"),
+        ]
+        city = ", ".join(p for p in city_parts if p) or address
+        print(f"[Geocode] {address} → {city} ({lat}, {lng}) ZIP {zip_code}")
+        return {
+            "lat": lat, "lng": lng,
+            "zip": str(zip_code) if zip_code else DEFAULT_ZIP,
+            "city": city,
+            "display_name": r.get("display_name", ""),
+        }
+    except Exception as e:
+        print(f"[Geocode] Error: {e}")
+        return None
 
 
-# ─── Location Detection ──────────────────────────────────────────────────────────
-
-def detect_location():
+def detect_ip_location():
     """Detect lat/lng/zip from current IP via ip-api.com (free, no key needed).
-    Returns (lat, lng, zip, city) on success, None on failure.
     Falls back to defaults silently.
     """
     try:
@@ -56,27 +106,23 @@ def detect_location():
         zip_code = data.get("zip") or ""
         city = f"{data.get('city', '')}, {data.get('regionName', '')} {zip_code}".strip()
         if lat and lng:
-            print(f"[Location] Detected: {city} ({lat}, {lng})")
+            print(f"[IP Detect] {city} ({lat}, {lng})")
             return {
                 "lat": lat, "lng": lng,
                 "zip": zip_code or DEFAULT_ZIP,
                 "city": city,
             }
     except Exception as e:
-        print(f"[Location] Detection failed: {e}, using defaults")
+        print(f"[IP Detect] Failed: {e}")
     return None
 
 
-# ─── GPS source: AccuWeather via pollencount.app ──────────────────────────────────
+# ─── GPS source: AccuWeather ─────────────────────────────────────────────────────
 
 def fetch_gps_data(lat, lng):
-    """Fetch pollen/weather data from AccuWeather (GPS-based)."""
     url = f"https://pollencount.app/api/getForecast?lat={lat}&lng={lng}"
-    print(f"Fetching GPS data from pollencount.app...")
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Mozilla/5.0 (compatible; PollenReport/1.0)"}
-    )
+    print("Fetching GPS data from pollencount.app...")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; PollenReport/1.0)"})
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             return json.loads(resp.read().decode())
@@ -86,11 +132,7 @@ def fetch_gps_data(lat, lng):
 
 
 def parse_gps_data(raw, source_name):
-    """Parse AccuWeather getForecast response into structured dict."""
-    result = {
-        "source": "GPS (AccuWeather)",
-        "source_name": source_name,
-    }
+    result = {"source": "GPS (AccuWeather)", "source_name": source_name}
     forecasts = raw.get("DailyForecasts", [])
     if not forecasts:
         return result
@@ -100,17 +142,13 @@ def parse_gps_data(raw, source_name):
         val = item.get("Value")
         cat = item.get("Category", "")
         if name == "Tree":
-            result["tree"] = val
-            result["tree_category"] = cat
+            result["tree"] = val; result["tree_category"] = cat
         elif name == "Grass":
-            result["grass"] = val
-            result["grass_category"] = cat
+            result["grass"] = val; result["grass_category"] = cat
         elif name == "Ragweed":
-            result["ragweed"] = val
-            result["ragweed_category"] = cat
+            result["ragweed"] = val; result["ragweed_category"] = cat
         elif name == "Mold":
-            result["mold"] = val
-            result["mold_category"] = cat
+            result["mold"] = val; result["mold_category"] = cat
         elif name == "AirQuality":
             result["air_quality"] = val
         elif name == "UVIndex":
@@ -120,25 +158,22 @@ def parse_gps_data(raw, source_name):
     result["temp_high"] = today.get("Temperature", {}).get("Maximum", {}).get("Value")
     result["temp_low"] = today.get("Temperature", {}).get("Minimum", {}).get("Value")
     result["hours_of_sun"] = today.get("HoursOfSun", "?")
-    fc = []
-    for day in forecasts[:6]:
-        fc.append({
+    result["forecast"] = [
+        {
             "date": day.get("Date", "")[:10],
             "temp_high": day.get("Temperature", {}).get("Maximum", {}).get("Value"),
             "temp_low": day.get("Temperature", {}).get("Minimum", {}).get("Value"),
             "tree": next((i.get("Value") for i in day.get("AirAndPollen", []) if i.get("Name") == "Tree"), None),
             "grass": next((i.get("Value") for i in day.get("AirAndPollen", []) if i.get("Name") == "Grass"), None),
-        })
-    result["forecast"] = fc
+        }
+        for day in forecasts[:6]
+    ]
     return result
 
 
-# ─── ZIP source: pollen.com via Chrome CDP ────────────────────────────────────────
+# ─── ZIP source: pollen.com via Chrome CDP ──────────────────────────────────────
 
 def fetch_zip_data(zip_code):
-    """Fetch species-level pollen data from pollen.com via Chrome CDP.
-    Falls back to None if CDP fails or script not found.
-    """
     print(f"Fetching ZIP data from pollen.com ({zip_code}) via CDP...")
     if not os.path.exists(ZIP_SCRIPT):
         print(f"  CDP script not found: {ZIP_SCRIPT}")
@@ -164,13 +199,9 @@ def fetch_zip_data(zip_code):
 
 
 def parse_zip_data(raw, zip_code):
-    """Parse pollen.com data into unified structure."""
     if raw is None:
         return {}
-    result = {
-        "source": "ZIP (pollen.com)",
-        "source_name": f"pollen.com ({zip_code})",
-    }
+    result = {"source": "ZIP (pollen.com)", "source_name": f"pollen.com ({zip_code})"}
     if "overall_index" in raw or "top_allergens" in raw:
         result["overall_index"] = raw.get("overall_index")
         result["overall_label"] = raw.get("overall_label", "")
@@ -178,7 +209,6 @@ def parse_zip_data(raw, zip_code):
         result["yesterday"] = raw.get("yesterday", {})
         result["tomorrow"] = raw.get("tomorrow", {})
         return result
-    # Old API format
     try:
         fc = raw.get("forecast", {})
         today = fc.get("today", fc.get("current", fc))
@@ -192,19 +222,18 @@ def parse_zip_data(raw, zip_code):
             v = today.get(k.title().replace("_", ""), today.get(k))
             if v is not None:
                 result[k] = v
-        result["forecast"] = []
-        for day in fc.get("extended", [])[:5]:
-            result["forecast"].append({
-                "date": day.get("date", day.get("Date", ""))[:10],
-                "tree": day.get("Tree", day.get("tree")),
-                "grass": day.get("Grass", day.get("grass")),
-            })
+        result["forecast"] = [
+            {"date": d.get("date", d.get("Date", ""))[:10],
+             "tree": d.get("Tree", d.get("tree")),
+             "grass": d.get("Grass", d.get("grass"))}
+            for d in fc.get("extended", [])[:5]
+        ]
     except Exception as e:
         print(f"ZIP parse error: {e}", file=sys.stderr)
     return result
 
 
-# ─── AQI from WAQI ───────────────────────────────────────────────────────────────
+# ─── AQI ───────────────────────────────────────────────────────────────────────
 
 def fetch_aqi(lat, lng):
     url = f"https://api.waqi.info/feed/geo:{lat:.4f};{lng:.4f}/?token=demo"
@@ -233,23 +262,15 @@ def severity_pollen(value, category):
         return "-", "gray"
     cat = (category or "").lower()
     color_map = {
-        "very low": "lightgreen",
-        "low": "green",
-        "moderate": "yellow",
-        "high": "orange",
-        "very high": "red",
+        "very low": "lightgreen", "low": "green",
+        "moderate": "yellow", "high": "orange", "very high": "red",
     }
     return category or "-", color_map.get(cat, "gray")
 
 
 def top_allergens(gps):
     allergens = []
-    for key, label in [
-        ("tree", "Tree"),
-        ("grass", "Grass"),
-        ("ragweed", "Ragweed"),
-        ("mold", "Mold"),
-    ]:
+    for key, label in [("tree","Tree"), ("grass","Grass"), ("ragweed","Ragweed"), ("mold","Mold")]:
         val = gps.get(key)
         cat = gps.get(f"{key}_category", "")
         if val is not None:
@@ -262,16 +283,11 @@ def top_allergens(gps):
 def severity_aqi(aqi):
     if aqi is None:
         return "-", "gray"
-    if aqi <= 50:
-        return "Good", "green"
-    elif aqi <= 100:
-        return "Moderate", "yellow"
-    elif aqi <= 150:
-        return "Unhealthy for Sensitive", "orange"
-    elif aqi <= 200:
-        return "Unhealthy", "red"
-    elif aqi <= 300:
-        return "Very Unhealthy", "purple"
+    if aqi <= 50: return "Good", "green"
+    elif aqi <= 100: return "Moderate", "yellow"
+    elif aqi <= 150: return "Unhealthy for Sensitive", "orange"
+    elif aqi <= 200: return "Unhealthy", "red"
+    elif aqi <= 300: return "Very Unhealthy", "purple"
     return "Hazardous", "maroon"
 
 
@@ -280,10 +296,10 @@ def source_block(data, is_gps=True):
     tag_class = "gps" if is_gps else "zip"
     loc = data.get("source_name", "Unknown location")
     src = "AccuWeather (pollencount.app)" if is_gps else "pollen.com"
-    allergen_vals = {k: data.get(k, 0) or 0 for k in ["tree", "grass", "ragweed", "mold"]}
+    allergen_vals = {k: data.get(k, 0) or 0 for k in ["tree","grass","ragweed","mold"]}
     top_key = max(allergen_vals, key=allergen_vals.get) if any(allergen_vals.values()) else None
     rows_html = ""
-    for key, icon in [("tree", "🌳"), ("grass", "🌾"), ("ragweed", "🌼"), ("mold", "🍄")]:
+    for key, icon in [("tree","🌳"), ("grass","🌾"), ("ragweed","🌼"), ("mold","🍄")]:
         val = data.get(key)
         cat = data.get(f"{key}_category", "")
         cat_disp, col = severity_pollen(val, cat)
@@ -315,7 +331,7 @@ def zip_species_block(zipd):
     allergens = zipd.get("top_allergens", [])
     overall_idx = zipd.get("overall_index")
     overall_lbl = zipd.get("overall_label", "")
-    pt_colors = {"Tree": "#1f6feb", "Grass": "#238636", "Weed": "#d29922", "": "#484f58"}
+    pt_colors = {"Tree":"#1f6feb","Grass":"#238636","Weed":"#d29922","":"#484f58"}
     allergen_rows = ""
     for t in allergens:
         pt = t.get("plantType", "")
@@ -327,11 +343,12 @@ def zip_species_block(zipd):
                 <span class="badge" style="background:{pt_col}">{pt}</span>
             </div>"""
     idx_str = f"{overall_idx}" if overall_idx is not None else "—"
+    zip_src_name = zipd.get("source_name", "")
     return f"""
         <div class="source-card">
             <div class="source-header">
                 <span class="source-tag zip">ZIP</span>
-                <span class="source-name">pollen.com ({zipd.get('source_name', '').split('(')[-1].rstrip(')')})</span>
+                <span class="source-name">pollen.com ({zip_src_name.split('(')[-1].rstrip(')')})</span>
             </div>
             <div class="pollen-rows">{allergen_rows}
             </div>
@@ -348,7 +365,6 @@ def generate_html(gps_data, zip_data, aqi, location):
     loc_display = location.get("city", DEFAULT_CITY)
     aqi_val = aqi.get("aqi")
     aqi_cat, aqi_col = severity_aqi(aqi_val)
-
     allergens = top_allergens(gps_data)
     allergen_rows = ""
     for label, val, cat, col in allergens:
@@ -361,9 +377,7 @@ def generate_html(gps_data, zip_data, aqi, location):
                     <span class="badge {col}">{cat}</span>
                 </div>
             </div>"""
-
     gps_block = source_block(gps_data, is_gps=True)
-
     if zip_data and zip_data.get("top_allergens"):
         zip_block = zip_species_block(zip_data)
     elif zip_data and zip_data.get("tree") is not None:
@@ -380,7 +394,6 @@ def generate_html(gps_data, zip_data, aqi, location):
                 <p>pollen.com species data currently unavailable.</p>
             </div>
         </div>"""
-
     weather = ""
     if gps_data.get("temp_high"):
         weather = f"""
@@ -393,7 +406,6 @@ def generate_html(gps_data, zip_data, aqi, location):
             </div>
             {('<p class="headline">' + gps_data["headline"] + '</p>') if gps_data.get("headline") else ''}
         </div>"""
-
     fc_rows = ""
     for day in gps_data.get("forecast", []):
         fc_rows += f"""
@@ -403,7 +415,6 @@ def generate_html(gps_data, zip_data, aqi, location):
             <span>🌳 {day.get("tree","?")}</span>
             <span>🌾 {day.get("grass","?")}</span>
         </div>"""
-
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -498,50 +509,58 @@ def generate_html(gps_data, zip_data, aqi, location):
 # ─── Main ────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Pollen Report Scraper")
+    parser = argparse.ArgumentParser(
+        description="Pollen Report Scraper — geocodes an address to lat/lng/zip, fetches pollen data"
+    )
+    parser.add_argument("--address", default=DEFAULT_ADDRESS,
+        help="Street address to geocode. Default: 10625 Glass Mountain Trl, Austin TX 78750")
+    parser.add_argument("--detect-ip", action="store_true",
+        help="Use IP-based location detection instead of address geocoding")
     parser.add_argument("--output", default=OUTPUT_JSON, help="Output JSON path")
     parser.add_argument("--html", default=DEFAULT_HTML, help="Output HTML path")
-    parser.add_argument("--test", action="store_true", help="Print outputs to stdout")
+    parser.add_argument("--test", action="store_true", help="Print to stdout")
     args = parser.parse_args()
 
-    # 1. Detect location (falls back to Austin TX defaults)
-    detected = detect_location()
-    if detected:
-        location = detected
+    # Resolve location
+    if args.detect_ip:
+        location = detect_ip_location()
+        if not location:
+            print("[Location] IP detection failed, using default address geocode")
+            location = geocode_address(DEFAULT_ADDRESS)
+            if not location:
+                location = {"lat": DEFAULT_LAT, "lng": DEFAULT_LNG, "zip": DEFAULT_ZIP, "city": DEFAULT_CITY}
     else:
-        location = {
-            "lat": DEFAULT_LAT, "lng": DEFAULT_LNG,
-            "zip": DEFAULT_ZIP, "city": DEFAULT_CITY,
-        }
-        print("[Location] Using default: Austin TX 78750")
+        location = geocode_address(args.address)
+        if not location:
+            print(f"[Location] Geocode failed for '{args.address}', falling back to default")
+            location = geocode_address(DEFAULT_ADDRESS)
+            if not location:
+                location = {"lat": DEFAULT_LAT, "lng": DEFAULT_LNG, "zip": DEFAULT_ZIP, "city": DEFAULT_CITY}
 
     lat = location["lat"]
     lng = location["lng"]
     zip_code = location["zip"]
 
-    # 2. Fetch data
+    # Fetch data
     gps_raw = fetch_gps_data(lat, lng)
     gps_data = parse_gps_data(gps_raw, location.get("city", DEFAULT_CITY)) if gps_raw else {}
     zip_raw = fetch_zip_data(zip_code)
     zip_data = parse_zip_data(zip_raw, zip_code)
     aqi = fetch_aqi(lat, lng)
 
-    # 3. Build output
+    # Build output
     allergens = top_allergens(gps_data)
     top = allergens[0] if allergens else None
-
     output = {
         "timestamp": datetime.now().isoformat(),
         "location": location.get("city", DEFAULT_CITY),
+        "address": args.address if not args.detect_ip else "IP-detected",
         "lat": lat, "lng": lng, "zip": zip_code,
-        "gps": gps_data,
-        "zip": zip_data,
-        "aqi": aqi,
+        "gps": gps_data, "zip": zip_data, "aqi": aqi,
         "top_allergen": top[0] if top else None,
         "top_allergen_value": top[1] if top else None,
         "top_allergen_category": top[2] if top else None,
     }
-
     html = generate_html(gps_data, zip_data, aqi, location)
 
     if args.test:
