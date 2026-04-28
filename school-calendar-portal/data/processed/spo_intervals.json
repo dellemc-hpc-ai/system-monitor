@@ -1,5 +1,5 @@
 {
-  "count": 280,
+  "count": 276,
   "intervals": [
     {
       "start": "2025-08-13",
@@ -615,24 +615,12 @@
     },
     {
       "start": "2026-03-13",
-      "end": "2026-03-13",
-      "custodian": "mom",
-      "reason": "regular_school_day"
-    },
-    {
-      "start": "2026-03-14",
-      "end": "2026-03-15",
-      "custodian": "mom",
-      "reason": "mom_weekend"
-    },
-    {
-      "start": "2026-03-16",
-      "end": "2026-03-20",
+      "end": "2026-03-19",
       "custodian": "dad",
       "reason": "spring_break"
     },
     {
-      "start": "2026-03-21",
+      "start": "2026-03-20",
       "end": "2026-03-22",
       "custodian": "dad",
       "reason": "espo_weekend"
@@ -1443,24 +1431,12 @@
     },
     {
       "start": "2027-03-12",
-      "end": "2027-03-12",
-      "custodian": "mom",
-      "reason": "regular_school_day"
-    },
-    {
-      "start": "2027-03-13",
-      "end": "2027-03-14",
-      "custodian": "mom",
-      "reason": "mom_weekend"
-    },
-    {
-      "start": "2027-03-15",
-      "end": "2027-03-19",
+      "end": "2027-03-18",
       "custodian": "mom",
       "reason": "spring_break"
     },
     {
-      "start": "2027-03-20",
+      "start": "2027-03-19",
       "end": "2027-03-21",
       "custodian": "dad",
       "reason": "espo_weekend"

@@ -225,14 +225,31 @@ class CustodyIntervalGenerator:
         br = sy.breaks.get("spring")
         if not br:
             return []
-        start_d = date.fromisoformat(br.start)
-        end_d = date.fromisoformat(br.end)
+        br_start = date.fromisoformat(br.start)
+        br_end = date.fromisoformat(br.end)
         h_rules = self.rules.get("holidays", {}).get("spring_break", {})
+        # Per §153.312(b)(1): Period is "6pm the day school is dismissed for spring vacation
+        # to 6pm the day before school resumes."
+        # The last school day BEFORE the break = custody period start.
+        # The day BEFORE school resumption = custody period end.
+        # e.g., 2026: last school day=3/13, school resumes=3/20 -> custody=3/13 to 3/19
+        # Walk backwards from (br_start - 1) to find the last weekday before the break.
+        # School is Mon-Fri; skip weekends. If noschool_dates is populated, also skip those.
+        candidate = br_start - timedelta(days=1)
+        while candidate.weekday() >= 5:  # skip Sat (5) and Sun (6)
+            candidate -= timedelta(days=1)
+        if self._no_school_dates:
+            while candidate in self._no_school_dates:
+                candidate -= timedelta(days=1)
+                while candidate.weekday() >= 5:
+                    candidate -= timedelta(days=1)
+        custody_start = candidate
+        custody_end = br_end - timedelta(days=1)
         # Per statute template alternation.base="calendar_year_of_break_start":
         # Spring break in 2026 (even) -> even_year_parent=dad
         # Spring break in 2025 (odd)  -> odd_year_parent=mom
-        parent = h_rules.get("odd_year_parent" if start_d.year % 2 == 1 else "even_year_parent", "dad")
-        return [CustodyInterval(start_d, end_d, parent, "spring_break", priority=2)]
+        parent = h_rules.get("odd_year_parent" if br_start.year % 2 == 1 else "even_year_parent", "dad")
+        return [CustodyInterval(custody_start, custody_end, parent, "spring_break", priority=2)]
 
     def _summer_intervals(self, sy: SchoolYear):
         """
