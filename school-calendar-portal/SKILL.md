@@ -47,7 +47,7 @@ Create `data/processed/{district}_standard_calendar.json`:
 }
 ```
 
-**CRITICAL — Spring break end date**: Per TX §153.312(b)(1), spring break possession ends at 6pm "the day before school resumes after that vacation." The day before school resumes = the district calendar's last day of school vacation (NOT the calendar day before school actually resumes). Example: RRISD spring break ends 03-20, school resumes 03-23 (Monday). Custody ends 6pm 03-20. So `spring.end` = `03-20`.
+**CRITICAL — Spring break end date**: Per TX §153.312(b)(1), spring break possession ends at 6pm "the day before school resumes after that vacation." This is the calendar day BEFORE school resumes (e.g., 03-22 when school resumes 03-23 Monday). It is NOT the district calendar's `spring.end` (which is the last day of the school's scheduled spring break, e.g., 03-20). The statute uses a calendar reference, not the district break end. Example: RRISD spring break 3/16-3/20, school resumes 3/23 (Monday) — custody ends 6pm 3/22.
 
 ## Step 3 — Run the Pipeline
 

@@ -183,27 +183,22 @@ When a date falls in multiple intervals, the one with the **lower priority numbe
 
 > "beginning at 6 p.m. on the day the child is dismissed from school for the spring vacation and ending at 6 p.m. on the day before school resumes after that vacation"
 
-| Period | Odd Year (2025) | Even Year (2026) |
-|--------|-----------------|------------------|
+| Period | Odd Year | Even Year |
+|--------|----------|-----------|
 | Spring break | Mom | Dad |
 
-**Spring break end date — critical clarification**:
+**Start**: 6pm on the **last school day** before spring vacation begins (the day school is dismissed for spring break).
 
-The statute says possession ends at 6pm "the day before school resumes after that vacation." The **last day of school vacation** (from the district calendar) equals the **day before school resumes** (since school resumes after the vacation ends). Therefore:
-
-- `end` = the district calendar's `spring.end` (last day of school vacation)
-- NOT the day school actually resumes
-- NOT the calendar day "before" school resumes in terms of calendar sequence
+**End**: 6pm on **the day before school resumes** (the calendar day immediately before the school resumption date, not the last day of the district's spring break calendar).
 
 **Example (RRISD 2025-2026)**:
-- Spring break: 3/16–3/20
+- Last school day before spring break: 3/13 (Friday) — custody starts 6pm 3/13
+- District spring break: 3/16–3/20
 - School resumes: 3/23 (Monday)
-- Statute says: 6pm "day before school resumes" = 6pm on 3/22 (Sunday)
-- BUT: 3/22 is a Sunday and falls within RRISD's already-scheduled spring break
-- The last day of school vacation per RRISD's calendar is 3/20
-- Since RRISD's break already ends on 3/20, the custody period ends at **6pm on 3/20**
+- Day before school resumes: 3/22 (Sunday)
+- Custody ends: **6pm on 3/22** (Sunday)
 
-In practice: `end` = `spring.end` from the district calendar = 03-20.
+**Note**: The district calendar's `spring.end` (last day of school's scheduled spring break, e.g., 3/20) may differ from "the day before school resumes" (e.g., 3/22). The statute uses the latter — it is a calendar date reference, not a reference to the district's break end.
 
 #### Summer (§153.312(b)(2))
 
