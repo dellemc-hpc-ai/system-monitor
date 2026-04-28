@@ -47,7 +47,7 @@ Create `data/processed/{district}_standard_calendar.json`:
 }
 ```
 
-**CRITICAL — Spring break end date**: Per TX §153.312(b)(1), spring break possession ends at 6pm "the day before school resumes after that vacation." This is the calendar day BEFORE school resumes (e.g., 03-22 when school resumes 03-23 Monday). It is NOT the district calendar's `spring.end` (which is the last day of the school's scheduled spring break, e.g., 03-20). The statute uses a calendar reference, not the district break end. Example: RRISD spring break 3/16-3/20, school resumes 3/23 (Monday) — custody ends 6pm 3/22.
+**CRITICAL — Spring break end date**: Per TX §153.312(b)(1), spring break possession ends at 6pm on the day before school resumes after that vacation. This is the calendar day BEFORE school resumes (e.g., 03-22 when school resumes 03-23 Monday) — NOT the district calendar's `spring.end` (which is the last day of the school's scheduled spring break, e.g., 03-20). The statute is a calendar reference, not a district calendar field. Example: RRISD spring break 3/16-3/20, school resumes 3/23 (Monday) — custody ends 6pm 3/22 (Sunday).
 
 ## Step 3 — Run the Pipeline
 
@@ -157,7 +157,7 @@ Possession: 6pm on the day child is dismissed for spring vacation to 6pm on the 
 | Odd | Mom |
 | Even | Dad |
 
-**End date = last day of school vacation** (NOT the calendar day before school resumes). Per RRISD: spring break 3/16-3/20, school resumes 3/23. Possession ends 6pm 3/20.
+**End date = the day before school resumes** (NOT the district's spring.end). Per RRISD: break 3/16-3/20, school resumes 3/23 (Mon), so custody ends 6pm 3/22 (Sun).
 
 ### Summer (§153.312(b)(2))
 
@@ -196,7 +196,7 @@ Uses **calendar year** (not school year). Spring break 2026 = even year = Dad.
 
 # Pitfalls
 
-1. **Spring break end date**: Do NOT use "day before school resumes" in calendar-day terms. Use the district calendar's spring.end value (last day of school vacation). RRISD: break ends 03-20, school resumes 03-23, custody ends 6pm 03-20.
+1. **Spring break end date**: Per §153.312(b)(1), custody ends 6pm on "the day before school resumes." For RRISD: break ends 03-20, school resumes 03-23, so custody ends 6pm **03-22** (Sunday). This is a calendar date — the day before school resumes — NOT the district's `spring.end`. The statute's language is the authoritative source, not the district calendar field.
 
 2. **Christmas Dec 28 split**: Render as split cell with AM = first-half custodian, PM = second-half custodian. Custody transfers at NOON (not 6pm or midnight).
 
