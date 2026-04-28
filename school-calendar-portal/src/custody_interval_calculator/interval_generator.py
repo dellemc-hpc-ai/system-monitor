@@ -161,7 +161,27 @@ class CustodyIntervalGenerator:
         br = sy.breaks.get("thanksgiving")
         if not br:
             return []
-        start_d = date.fromisoformat(br.start)
+        school_start = date.fromisoformat(sy.start)
+        school_end = date.fromisoformat(sy.end)
+
+        # District-defined Thanksgiving break start (from calendar data) = first noschool day
+        district_tg_start = date.fromisoformat(br.start)
+
+        # Custody Thanksgiving period starts on the LAST school day BEFORE the district start.
+        # Per §153.314(3): possession begins at 6pm on "the day the child is dismissed
+        # from school before Thanksgiving" — i.e., the last day school is in session.
+        # District br.start is the first noschool day, so walk backward to find the last school day.
+        last_school_day = None
+        d = district_tg_start - timedelta(days=1)
+        while d >= school_start:
+            if d.weekday() < 5 and d <= school_end:
+                last_school_day = d
+                break
+            d -= timedelta(days=1)
+        if last_school_day is None:
+            last_school_day = district_tg_start - timedelta(days=1)
+
+        start_d = last_school_day
         end_d = date.fromisoformat(br.end)
         h_rules = self.rules.get("holidays", {}).get("thanksgiving", {})
         # Per §153.314(3): Odd year = possessory conservator (Dad) gets WHOLE period

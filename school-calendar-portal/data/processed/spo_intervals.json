@@ -1,5 +1,5 @@
 {
-  "count": 270,
+  "count": 268,
   "intervals": [
     {
       "start": "2025-08-13",
@@ -333,12 +333,6 @@
     },
     {
       "start": "2025-11-21",
-      "end": "2025-11-23",
-      "custodian": "dad",
-      "reason": "espo_weekend"
-    },
-    {
-      "start": "2025-11-24",
       "end": "2025-11-30",
       "custodian": "dad",
       "reason": "thanksgiving"
@@ -1119,12 +1113,6 @@
     },
     {
       "start": "2026-11-20",
-      "end": "2026-11-20",
-      "custodian": "dad",
-      "reason": "espo_weekend"
-    },
-    {
-      "start": "2026-11-21",
       "end": "2026-11-27",
       "custodian": "mom",
       "reason": "thanksgiving"
