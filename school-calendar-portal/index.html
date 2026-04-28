@@ -1,279 +1,305 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Round Rock ISD Co-Parenting Portal | 共同抚养门户</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', system-ui, sans-serif; background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); min-height: 100vh; color: #fff; }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .lang-toggle { display: flex; justify-content: flex-end; gap: 10px; padding: 20px; }
-        .lang-btn { padding: 8px 20px; border: 2px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #fff; border-radius: 20px; cursor: pointer; }
-        .lang-btn.active { background: rgba(255,255,255,0.2); }
-        h1 { text-align: center; margin: 20px 0; font-size: 2em; }
-        .calendar-row { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; margin-bottom: 40px; }
-        .month-calendar { background: rgba(255,255,255,0.05); border-radius: 12px; padding: 15px; min-width: 280px; flex: 1; }
-        .month-calendar h3 { text-align: center; margin-bottom: 10px; color: #aaa; }
-        .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.8em; color: #888; margin-bottom: 5px; }
-        .cal-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
-        .cal-day { aspect-ratio: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 6px; font-size: 0.9em; position: relative; }
-        .cal-day.dad { background: rgba(220, 53, 69, 0.3); border: 1px solid rgba(220, 53, 69, 0.5); }
-        .cal-day.mom { background: rgba(111, 66, 193, 0.3); border: 1px solid rgba(111, 66, 193, 0.5); }
-        .cal-day.other-month { opacity: 0.3; }
-        .day-num { font-weight: bold; }
-        .day-label { font-size: 0.6em; color: #ccc; text-align: center; overflow: hidden; }
-        .legend { display: flex; justify-content: center; gap: 30px; margin: 20px 0; }
-        .legend-item { display: flex; align-items: center; gap: 8px; }
-        .legend-dot { width: 20px; height: 20px; border-radius: 4px; }
-        .legend-dot.dad { background: rgba(220, 53, 69, 0.5); }
-        .legend-dot.mom { background: rgba(111, 66, 193, 0.5); }
-        .section-tabs { display: flex; justify-content: center; gap: 10px; margin: 20px 0; }
-        .tab-btn { padding: 10px 30px; border: none; border-radius: 20px; cursor: pointer; font-size: 1em; background: rgba(255,255,255,0.1); color: #fff; }
-        .tab-btn.active { background: rgba(255,255,255,0.3); }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
-        .uncertain-break { border: 1px dashed #666 !important; opacity: 0.6; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Custody Calendar -- round rock isd</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; }
+  .toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 20px; background: #fff; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 100; }
+  .toolbar h1 { font-size: 1.1rem; margin-right: auto; }
+  button { padding: 6px 14px; border: 1px solid #aaa; border-radius: 6px; background: #fff; cursor: pointer; font-size: 0.9rem; }
+  button:hover { background: #eee; }
+  button.active { background: #333; color: #fff; border-color: #333; }
+  .cal-nav { display: flex; align-items: center; gap: 8px; margin: 16px 20px 0; }
+  .cal-nav span { font-size: 1.1rem; font-weight: 600; min-width: 200px; text-align: center; }
+  .calendar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; padding: 12px 20px 24px; }
+  .month-box { background: #fff; border-radius: 10px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+  .month-title { text-align: center; font-weight: 600; margin-bottom: 8px; color: #333; font-size: 0.95rem; }
+  .day-headers { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; margin-bottom: 4px; }
+  .dh { text-align: center; font-size: 0.75rem; color: #888; padding: 2px; }
+  .days-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; }
+  .day { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; border-radius: 4px; cursor: default; position: relative; min-height: 32px; color: #333; }
+  .day.empty { background: transparent; }
+  .day.dad { background: #dbeafe; color: #1e40af; }
+  .day.mom { background: #fce7f3; color: #9d174d; }
+  .day.today { outline: 2px solid #333; outline-offset: -2px; font-weight: 700; }
+  .day.split {
+    display: flex !important;
+    flex-direction: column;
+    font-size: 0.65rem;
+    line-height: 1.1;
+    padding: 1px 2px;
+  }
+  .day.split .am { border-radius: 4px 4px 0 0; flex: 1 1 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+  .day.split .pm { border-radius: 0 0 4px 4px; flex: 1 1 50%; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+  .day.split .am.dad { background: #dbeafe; color: #1e40af; }
+  .day.split .am.mom { background: #fce7f3; color: #9d174d; }
+  .day.split .pm.dad { background: #bfdbfe; color: #1e40af; }
+  .day.split .pm.mom { background: #fbcfe8; color: #9d174d; }
+  .day.split .sep { height: 1px; background: rgba(0,0,0,0.25); width: 80%; }
+  .day:hover .tooltip { opacity: 1; visibility: visible; transform: translateY(0); }
+  .tooltip { position: absolute; bottom: 110%; left: 50%; transform: translateX(-50%) translateY(4px); background: #333; color: #fff; padding: 6px 10px; border-radius: 6px; font-size: 0.7rem; white-space: nowrap; z-index: 200; opacity: 0; visibility: hidden; transition: 0.15s; pointer-events: none; text-align: center; }
+  .tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 5px solid transparent; border-top-color: #333; }
+  .legend { display: flex; gap: 20px; justify-content: center; padding: 8px; font-size: 0.85rem; }
+  .legend span { display: flex; align-items: center; gap: 6px; }
+  .legend .dad-swatch { width: 14px; height: 14px; border-radius: 3px; background: #dbeafe; border: 1px solid #1e40af; }
+  .legend .mom-swatch { width: 14px; height: 14px; border-radius: 3px; background: #fce7f3; border: 1px solid #9d174d; }
+  .legend .split-swatch { width: 14px; height: 14px; border-radius: 3px; background: linear-gradient(to bottom, #dbeafe 50%, #fce7f3 50%); border: 1px solid #aaa; }
+  .footer { text-align: center; padding: 16px; color: #888; font-size: 0.8rem; }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="lang-toggle">
-            <button class="lang-btn active" onclick="setLang('en')">EN</button>
-            <button class="lang-btn" onclick="setLang('cn')">中文</button>
-        </div>
-        <h1>Round Rock ISD -- Co-Parenting Calendar</h1>
-        <div class="legend">
-            <div class="legend-item"><div class="legend-dot dad"></div><span>Dad</span></div>
-            <div class="legend-item"><div class="legend-dot mom"></div><span>Mom</span></div>
-        </div>
-        <div class="section-tabs">
-            <button class="tab-btn active" onclick="showSection('spo')">SPO Calendar</button>
-            <button class="tab-btn" onclick="showSection('espo')">ESPO Calendar</button>
-        </div>
-        <div id="spoContainer" class="tab-content active"></div>
-        <div id="espoContainer" class="tab-content"></div>
-    </div>
-    <script>
-    const schoolBreaks = [{"start": "2025-11-24", "end": "2025-11-30", "label": {"en": "Fall Break", "cn": "秋假"}}, {"start": "2025-12-19", "end": "2026-01-05", "schoolResumes": "2026-01-06", "label": {"en": "Winter Break", "cn": "寒假"}}, {"start": "2026-03-16", "end": "2026-03-22", "schoolResumes": "2026-03-23", "label": {"en": "Spring Break", "cn": "春假"}}, {"start": "2026-11-21", "end": "2026-11-29", "label": {"en": "Fall Break", "cn": "秋假"}}, {"start": "2026-12-18", "end": "2027-01-05", "schoolResumes": "2027-01-06", "label": {"en": "Winter Break", "cn": "寒假"}}, {"start": "2027-03-15", "end": "2027-03-21", "schoolResumes": "2027-03-22", "label": {"en": "Spring Break", "cn": "春假"}}, {"start": "2027-05-28", "end": "2027-08-16", "schoolResumes": "2027-08-17", "label": {"en": "Summer Break", "cn": "暑假"}}];
-    const noschoolDays = [{"date": "2025-09-01", "label": "Labor Day"}, {"date": "2025-09-22", "label": "Student Holiday (Rosh Hashanah)"}, {"date": "2025-09-23", "label": "Student Holiday (Rosh Hashanah)"}, {"date": "2025-10-13", "label": "Student Holiday (Indigenous Peoples' Day)"}, {"date": "2025-10-20", "label": "Student Holiday (Diwali)"}, {"date": "2025-11-07", "label": "Staff Development Day"}, {"date": "2026-01-19", "label": "MLK Jr. Day"}, {"date": "2026-02-16", "label": "Presidents Day"}, {"date": "2026-02-17", "label": "Student Holiday (Lunar New Year)"}, {"date": "2026-04-03", "label": "Good Friday"}, {"date": "2026-05-25", "label": "Memorial Day"}];
-    const noSchoolSet = new Set(noschoolDays.map(n => n.date));
-    const nationalHolidays = [
-        { month: 0, day: 1, label: { en: "New Year's Day", cn: '元旦' } },
-        { month: 0, monday: 2, label: { en: 'MLK Day', cn: '马丁路德金日' } },
-        { month: 1, day: 14, label: { en: 'Valentine\'s Day', cn: '情人节' } },
-        { month: 2, day: 17, label: { en: 'St. Patrick\'s Day', cn: '圣帕特里克节' } },
-        { month: 3, day: 4, label: { en: 'Easter Sunday', cn: '复活节' } },
-        { month: 4, day: 1, label: { en: 'Cinco de Mayo', cn: '五日节' } },
-        { month: 5, monday: 3, label: { en: 'Memorial Day', cn: '阵亡将士纪念日' } },
-        { month: 6, day: 4, label: { en: 'Independence Day', cn: '美国独立日' } },
-        { month: 8, monday: 1, label: { en: 'Labor Day', cn: '劳动节' } },
-        { month: 9, day: 12, label: { en: 'Columbus Day', cn: '哥伦布日' } },
-        { month: 9, day: 31, label: { en: 'Halloween', cn: '万圣节' } },
-        { month: 10, day: 11, label: { en: 'Veterans Day', cn: '退伍军人节' } },
-        { month: 10, day: 27, label: { en: 'Thanksgiving', cn: '感恩节' } },
-        { month: 10, friday: 4, label: { en: 'Day after Thanksgiving', cn: '黑色星期五' } },
-        { month: 11, day: 25, label: { en: 'Christmas Day', cn: '圣诞节' } },
-    ];
+<div class="toolbar">
+  <h1 id="title">Custody Calendar</h1>
+  <button id="langToggle">CN</button>
+  <button id="espoBtn" class="active">ESPO</button>
+  <button id="spoBtn">SPO</button>
+</div>
+<div class="cal-nav">
+  <button id="prevBtn">&lt;</button>
+  <span id="curRange"></span>
+  <button id="nextBtn">&gt;</button>
+</div>
+<div class="legend">
+  <span><div class="dad-swatch"></div> Dad</span>
+  <span><div class="mom-swatch"></div> Mom</span>
+  <span><div class="split-swatch"></div> <span id="splitLegend">§153.314 Split Day · Noon Dec 28 custody exchange</span></span>
+</div>
+<div class="calendar-grid" id="calendar"></div>
+<div class="footer">TX Sec.153.314 -- round rock isd -- commit:c78cf3d</div>
+<script>
+const I18N = {"en": {"title": "Custody Calendar", "dad": "Dad", "mom": "Mom", "today": "Today", "prev_month": "Prev", "next_month": "Next", "mode_spo": "SPO", "mode_espo": "ESPO", "lang_en": "EN", "lang_cn": "CN", "weekdays": ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"], "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"], "breaks": {"thanksgiving": "Thanksgiving Break", "christmas": "Christmas Break", "spring": "Spring Break", "summer": "Summer Break"}, "noschool": "No School", "regular": "School Day", "spo_weekend": "Dad Weekend (SPO)", "thanksgiving_first_half": "Dad - TG 1st half", "thanksgiving_second_half": "Mom - TG 2nd half", "christmas_first_half": "Dad - Xmas 1st half", "christmas_second_half": "Mom - Xmas 2nd half", "christmas_split": "§153.314 Split Day · Noon Dec 28 custody exchange", "spring_break": "Spring Break", "summer_dad_30_days": "Dad Summer (Jul 1-30)", "summer_mom_before_dad": "Mom Summer (before Dad)", "summer_mom_after_dad": "Mom Summer (after Dad)", "summer_remainder": "Mom Summer (remainder)", "summer_possessory": "Dad Summer (possessory)", "noschool_day": "No School", "regular_school_day": "School Day", "fathers_day": "Father's Day Weekend", "mothers_day": "Mother's Day Weekend", "thursday": "Thursday (Dad)", "weekend": "Dad Weekend", "default_custody": "Mom (default)", "thanksgiving": "Thanksgiving", "christmas": "Christmas"}, "cn": {"title": "抚养权日历", "dad": "爸爸", "mom": "妈妈", "today": "Today", "prev_month": "上月", "next_month": "下月", "mode_spo": "标准抚养令", "mode_espo": "扩展抚养令", "lang_en": "EN", "lang_cn": "CN", "weekdays": ["周日", "周一", "周二", "周三", "周四", "周五", "周六"], "months": ["一月", "二月", "三月", "四月", "五月", "六月", "七月", "八月", "九月", "十月", "十一月", "十二月"], "breaks": {"thanksgiving": "感恩节假期", "christmas": "圣诞假期", "spring": "春假", "summer": "暑假"}, "noschool": "No School", "regular": "上课日", "spo_weekend": "爸爸周末", "thanksgiving_first_half": "爸爸 - 感恩节前半", "thanksgiving_second_half": "妈妈 - 感恩节后半", "christmas_first_half": "爸爸 - 圣诞前半", "christmas_second_half": "妈妈 - 圣诞后半", "christmas_split": "§153.314 固定交换日 · 中午 12:00 交换", "spring_break": "春假", "summer_dad_30_days": "爸爸暑假(7月1-30日)", "summer_mom_before_dad": "妈妈暑假(Dad前)", "summer_mom_after_dad": "妈妈暑假(Dad后)", "summer_remainder": "妈妈暑假(剩余)", "summer_possessory": "爸爸暑假", "noschool_day": "休息日", "regular_school_day": "上课日", "fathers_day": "父亲节周末", "mothers_day": "母亲节周末", "thursday": "周四(爸爸)", "weekend": "爸爸周末", "default_custody": "妈妈(默认)", "thanksgiving": "感恩节", "christmas": "圣诞节"}};
+const ESPO_INTERVALS = [{"start": "2025-08-13", "end": "2025-08-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-14", "end": "2025-08-14", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-08-15", "end": "2025-08-17", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-08-18", "end": "2025-08-20", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-21", "end": "2025-08-21", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-08-22", "end": "2025-08-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-23", "end": "2025-08-24", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-08-25", "end": "2025-08-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-28", "end": "2025-08-28", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-08-29", "end": "2025-08-31", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-09-01", "end": "2025-09-01", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-09-02", "end": "2025-09-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-04", "end": "2025-09-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-05", "end": "2025-09-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-09-08", "end": "2025-09-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-11", "end": "2025-09-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-12", "end": "2025-09-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-13", "end": "2025-09-14", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-09-15", "end": "2025-09-17", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-18", "end": "2025-09-18", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-19", "end": "2025-09-21", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-09-22", "end": "2025-09-23", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-09-24", "end": "2025-09-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-25", "end": "2025-09-25", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-26", "end": "2025-09-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-27", "end": "2025-09-28", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-09-29", "end": "2025-10-01", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-02", "end": "2025-10-02", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-03", "end": "2025-10-05", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-10-06", "end": "2025-10-08", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-09", "end": "2025-10-09", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-10", "end": "2025-10-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-11", "end": "2025-10-12", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-10-13", "end": "2025-10-13", "custodian": "mom", "reason": "noschool_day"}, {"start": "2025-10-14", "end": "2025-10-15", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-16", "end": "2025-10-16", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-17", "end": "2025-10-19", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-10-20", "end": "2025-10-20", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-10-21", "end": "2025-10-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-23", "end": "2025-10-23", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-24", "end": "2025-10-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-25", "end": "2025-10-26", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-10-27", "end": "2025-10-29", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-30", "end": "2025-10-30", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-31", "end": "2025-11-02", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-11-03", "end": "2025-11-05", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-06", "end": "2025-11-06", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-11-07", "end": "2025-11-07", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-11-08", "end": "2025-11-09", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-11-10", "end": "2025-11-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-13", "end": "2025-11-13", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-11-14", "end": "2025-11-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-15", "end": "2025-11-16", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-11-17", "end": "2025-11-19", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-20", "end": "2025-11-20", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-11-21", "end": "2025-11-23", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-11-24", "end": "2025-11-30", "custodian": "dad", "reason": "thanksgiving"}, {"start": "2025-12-01", "end": "2025-12-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-04", "end": "2025-12-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-12-05", "end": "2025-12-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-12-08", "end": "2025-12-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-11", "end": "2025-12-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-12-12", "end": "2025-12-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-13", "end": "2025-12-14", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-12-15", "end": "2025-12-17", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-18", "end": "2025-12-28", "custodian": "mom", "reason": "christmas_first_half"}, {"start": "2025-12-29", "end": "2026-01-05", "custodian": "dad", "reason": "christmas_second_half"}, {"start": "2026-01-06", "end": "2026-01-07", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-08", "end": "2026-01-08", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-09", "end": "2026-01-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-10", "end": "2026-01-11", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-01-12", "end": "2026-01-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-15", "end": "2026-01-15", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-16", "end": "2026-01-18", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-01-19", "end": "2026-01-19", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-01-20", "end": "2026-01-21", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-22", "end": "2026-01-22", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-23", "end": "2026-01-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-24", "end": "2026-01-25", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-01-26", "end": "2026-01-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-29", "end": "2026-01-29", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-30", "end": "2026-02-01", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-02-02", "end": "2026-02-04", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-05", "end": "2026-02-05", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-06", "end": "2026-02-08", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-02-09", "end": "2026-02-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-12", "end": "2026-02-12", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-13", "end": "2026-02-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-14", "end": "2026-02-15", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-02-16", "end": "2026-02-17", "custodian": "mom", "reason": "noschool_day"}, {"start": "2026-02-18", "end": "2026-02-18", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-19", "end": "2026-02-19", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-20", "end": "2026-02-22", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-02-23", "end": "2026-02-25", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-26", "end": "2026-02-26", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-27", "end": "2026-02-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-28", "end": "2026-03-01", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-03-02", "end": "2026-03-04", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-05", "end": "2026-03-05", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-03-06", "end": "2026-03-08", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-03-09", "end": "2026-03-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-12", "end": "2026-03-12", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-03-13", "end": "2026-03-20", "custodian": "dad", "reason": "spring_break"}, {"start": "2026-03-21", "end": "2026-03-22", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-03-23", "end": "2026-03-25", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-26", "end": "2026-03-26", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-03-27", "end": "2026-03-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-28", "end": "2026-03-29", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-03-30", "end": "2026-04-01", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-02", "end": "2026-04-02", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-03", "end": "2026-04-03", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-04-04", "end": "2026-04-05", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-04-06", "end": "2026-04-08", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-09", "end": "2026-04-09", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-10", "end": "2026-04-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-11", "end": "2026-04-12", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-04-13", "end": "2026-04-15", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-16", "end": "2026-04-16", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-17", "end": "2026-04-19", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-04-20", "end": "2026-04-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-23", "end": "2026-04-23", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-24", "end": "2026-04-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-25", "end": "2026-04-26", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-04-27", "end": "2026-04-29", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-30", "end": "2026-04-30", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-05-01", "end": "2026-05-03", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-05-04", "end": "2026-05-06", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-05-07", "end": "2026-05-07", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-05-08", "end": "2026-05-10", "custodian": "mom", "reason": "mothers_day"}, {"start": "2026-05-11", "end": "2026-05-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-05-14", "end": "2026-05-14", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-05-15", "end": "2026-05-17", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-05-18", "end": "2026-05-20", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-05-21", "end": "2026-06-18", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2026-06-19", "end": "2026-06-21", "custodian": "dad", "reason": "fathers_day"}, {"start": "2026-06-22", "end": "2026-06-30", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2026-07-01", "end": "2026-07-30", "custodian": "dad", "reason": "summer_dad_30_days"}, {"start": "2026-07-31", "end": "2026-08-17", "custodian": "mom", "reason": "summer_mom_after_dad"}, {"start": "2026-08-18", "end": "2026-08-19", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-08-20", "end": "2026-08-20", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-08-21", "end": "2026-08-23", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-08-24", "end": "2026-08-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-08-27", "end": "2026-08-27", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-08-28", "end": "2026-08-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-08-29", "end": "2026-08-30", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-08-31", "end": "2026-09-02", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-03", "end": "2026-09-03", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-04", "end": "2026-09-06", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-09-07", "end": "2026-09-07", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-09-08", "end": "2026-09-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-10", "end": "2026-09-10", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-11", "end": "2026-09-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-12", "end": "2026-09-13", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-09-14", "end": "2026-09-16", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-17", "end": "2026-09-17", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-18", "end": "2026-09-20", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-09-21", "end": "2026-09-21", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-09-22", "end": "2026-09-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-24", "end": "2026-09-24", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-25", "end": "2026-09-25", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-26", "end": "2026-09-27", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-09-28", "end": "2026-09-30", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-01", "end": "2026-10-01", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-02", "end": "2026-10-04", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-10-05", "end": "2026-10-07", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-08", "end": "2026-10-08", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-09", "end": "2026-10-12", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-10-13", "end": "2026-10-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-15", "end": "2026-10-15", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-16", "end": "2026-10-18", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-10-19", "end": "2026-10-19", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-10-20", "end": "2026-10-21", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-22", "end": "2026-10-22", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-23", "end": "2026-10-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-24", "end": "2026-10-25", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-10-26", "end": "2026-10-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-29", "end": "2026-10-29", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-30", "end": "2026-11-01", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-11-02", "end": "2026-11-04", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-05", "end": "2026-11-05", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-11-06", "end": "2026-11-08", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-11-09", "end": "2026-11-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-12", "end": "2026-11-12", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-11-13", "end": "2026-11-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-14", "end": "2026-11-15", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-11-16", "end": "2026-11-18", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-19", "end": "2026-11-19", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-11-20", "end": "2026-11-20", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-11-21", "end": "2026-11-27", "custodian": "mom", "reason": "thanksgiving"}, {"start": "2026-11-28", "end": "2026-11-29", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-11-30", "end": "2026-12-02", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-03", "end": "2026-12-03", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-12-04", "end": "2026-12-06", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-12-07", "end": "2026-12-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-10", "end": "2026-12-10", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-12-11", "end": "2026-12-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-12", "end": "2026-12-13", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-12-14", "end": "2026-12-16", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-17", "end": "2026-12-28", "custodian": "dad", "reason": "christmas_first_half"}, {"start": "2026-12-29", "end": "2027-01-05", "custodian": "mom", "reason": "christmas_second_half"}, {"start": "2027-01-06", "end": "2027-01-06", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-07", "end": "2027-01-07", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-08", "end": "2027-01-08", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-09", "end": "2027-01-10", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-01-11", "end": "2027-01-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-14", "end": "2027-01-14", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-15", "end": "2027-01-17", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-01-18", "end": "2027-01-18", "custodian": "dad", "reason": "noschool_day"}, {"start": "2027-01-19", "end": "2027-01-20", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-21", "end": "2027-01-21", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-22", "end": "2027-01-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-23", "end": "2027-01-24", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-01-25", "end": "2027-01-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-28", "end": "2027-01-28", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-29", "end": "2027-01-31", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-02-01", "end": "2027-02-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-04", "end": "2027-02-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-05", "end": "2027-02-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-02-08", "end": "2027-02-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-11", "end": "2027-02-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-12", "end": "2027-02-15", "custodian": "dad", "reason": "noschool_day"}, {"start": "2027-02-16", "end": "2027-02-17", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-18", "end": "2027-02-18", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-19", "end": "2027-02-21", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-02-22", "end": "2027-02-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-25", "end": "2027-02-25", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-26", "end": "2027-02-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-27", "end": "2027-02-28", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-03-01", "end": "2027-03-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-03-04", "end": "2027-03-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-03-05", "end": "2027-03-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-03-08", "end": "2027-03-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-03-10", "end": "2027-03-10", "custodian": "mom", "reason": "noschool_day"}, {"start": "2027-03-11", "end": "2027-03-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-03-12", "end": "2027-03-19", "custodian": "mom", "reason": "spring_break"}, {"start": "2027-03-20", "end": "2027-03-21", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-03-22", "end": "2027-03-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-03-25", "end": "2027-03-25", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-03-26", "end": "2027-03-26", "custodian": "dad", "reason": "noschool_day"}, {"start": "2027-03-27", "end": "2027-03-28", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-03-29", "end": "2027-03-31", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-01", "end": "2027-04-01", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-02", "end": "2027-04-04", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-04-05", "end": "2027-04-07", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-08", "end": "2027-04-08", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-09", "end": "2027-04-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-10", "end": "2027-04-11", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-04-12", "end": "2027-04-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-15", "end": "2027-04-15", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-16", "end": "2027-04-18", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-04-19", "end": "2027-04-21", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-22", "end": "2027-04-22", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-23", "end": "2027-04-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-24", "end": "2027-04-25", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-04-26", "end": "2027-04-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-29", "end": "2027-04-29", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-30", "end": "2027-05-02", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-05-03", "end": "2027-05-05", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-06", "end": "2027-05-06", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-05-07", "end": "2027-05-09", "custodian": "mom", "reason": "mothers_day"}, {"start": "2027-05-10", "end": "2027-05-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-13", "end": "2027-05-13", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-05-14", "end": "2027-05-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-15", "end": "2027-05-16", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-05-17", "end": "2027-05-19", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-20", "end": "2027-05-20", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-05-21", "end": "2027-05-23", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-05-24", "end": "2027-05-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-27", "end": "2027-06-17", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2027-06-18", "end": "2027-06-20", "custodian": "dad", "reason": "fathers_day"}, {"start": "2027-06-21", "end": "2027-06-30", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2027-07-01", "end": "2027-07-30", "custodian": "dad", "reason": "summer_dad_30_days"}];
+const SPO_INTERVALS = [{"start": "2025-08-13", "end": "2025-08-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-14", "end": "2025-08-14", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-08-15", "end": "2025-08-17", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-08-18", "end": "2025-08-20", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-21", "end": "2025-08-21", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-08-22", "end": "2025-08-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-23", "end": "2025-08-24", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-08-25", "end": "2025-08-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-08-28", "end": "2025-08-28", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-08-29", "end": "2025-08-31", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-09-01", "end": "2025-09-01", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-09-02", "end": "2025-09-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-04", "end": "2025-09-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-05", "end": "2025-09-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-09-08", "end": "2025-09-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-11", "end": "2025-09-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-12", "end": "2025-09-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-13", "end": "2025-09-14", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-09-15", "end": "2025-09-17", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-18", "end": "2025-09-18", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-19", "end": "2025-09-21", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-09-22", "end": "2025-09-23", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-09-24", "end": "2025-09-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-25", "end": "2025-09-25", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-09-26", "end": "2025-09-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-09-27", "end": "2025-09-28", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-09-29", "end": "2025-10-01", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-02", "end": "2025-10-02", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-03", "end": "2025-10-05", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-10-06", "end": "2025-10-08", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-09", "end": "2025-10-09", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-10", "end": "2025-10-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-11", "end": "2025-10-12", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-10-13", "end": "2025-10-13", "custodian": "mom", "reason": "noschool_day"}, {"start": "2025-10-14", "end": "2025-10-15", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-16", "end": "2025-10-16", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-17", "end": "2025-10-19", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-10-20", "end": "2025-10-20", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-10-21", "end": "2025-10-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-23", "end": "2025-10-23", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-24", "end": "2025-10-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-25", "end": "2025-10-26", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-10-27", "end": "2025-10-29", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-10-30", "end": "2025-10-30", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-10-31", "end": "2025-11-02", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-11-03", "end": "2025-11-05", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-06", "end": "2025-11-06", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-11-07", "end": "2025-11-07", "custodian": "dad", "reason": "noschool_day"}, {"start": "2025-11-08", "end": "2025-11-09", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-11-10", "end": "2025-11-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-13", "end": "2025-11-13", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-11-14", "end": "2025-11-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-15", "end": "2025-11-16", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-11-17", "end": "2025-11-19", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-11-20", "end": "2025-11-20", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-11-21", "end": "2025-11-23", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-11-24", "end": "2025-11-30", "custodian": "dad", "reason": "thanksgiving"}, {"start": "2025-12-01", "end": "2025-12-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-04", "end": "2025-12-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-12-05", "end": "2025-12-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2025-12-08", "end": "2025-12-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-11", "end": "2025-12-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2025-12-12", "end": "2025-12-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-13", "end": "2025-12-14", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2025-12-15", "end": "2025-12-17", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2025-12-18", "end": "2025-12-28", "custodian": "mom", "reason": "christmas_first_half"}, {"start": "2025-12-29", "end": "2026-01-05", "custodian": "dad", "reason": "christmas_second_half"}, {"start": "2026-01-06", "end": "2026-01-07", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-08", "end": "2026-01-08", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-09", "end": "2026-01-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-10", "end": "2026-01-11", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-01-12", "end": "2026-01-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-15", "end": "2026-01-15", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-16", "end": "2026-01-18", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-01-19", "end": "2026-01-19", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-01-20", "end": "2026-01-21", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-22", "end": "2026-01-22", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-23", "end": "2026-01-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-24", "end": "2026-01-25", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-01-26", "end": "2026-01-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-01-29", "end": "2026-01-29", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-01-30", "end": "2026-02-01", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-02-02", "end": "2026-02-04", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-05", "end": "2026-02-05", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-06", "end": "2026-02-08", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-02-09", "end": "2026-02-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-12", "end": "2026-02-12", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-13", "end": "2026-02-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-14", "end": "2026-02-15", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-02-16", "end": "2026-02-17", "custodian": "mom", "reason": "noschool_day"}, {"start": "2026-02-18", "end": "2026-02-18", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-19", "end": "2026-02-19", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-20", "end": "2026-02-22", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-02-23", "end": "2026-02-25", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-26", "end": "2026-02-26", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-02-27", "end": "2026-02-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-02-28", "end": "2026-03-01", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-03-02", "end": "2026-03-04", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-05", "end": "2026-03-05", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-03-06", "end": "2026-03-08", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-03-09", "end": "2026-03-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-12", "end": "2026-03-12", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-03-13", "end": "2026-03-20", "custodian": "dad", "reason": "spring_break"}, {"start": "2026-03-21", "end": "2026-03-22", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-03-23", "end": "2026-03-25", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-26", "end": "2026-03-26", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-03-27", "end": "2026-03-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-03-28", "end": "2026-03-29", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-03-30", "end": "2026-04-01", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-02", "end": "2026-04-02", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-03", "end": "2026-04-03", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-04-04", "end": "2026-04-05", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-04-06", "end": "2026-04-08", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-09", "end": "2026-04-09", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-10", "end": "2026-04-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-11", "end": "2026-04-12", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-04-13", "end": "2026-04-15", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-16", "end": "2026-04-16", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-17", "end": "2026-04-19", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-04-20", "end": "2026-04-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-23", "end": "2026-04-23", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-04-24", "end": "2026-04-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-25", "end": "2026-04-26", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-04-27", "end": "2026-04-29", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-04-30", "end": "2026-04-30", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-05-01", "end": "2026-05-03", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-05-04", "end": "2026-05-06", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-05-07", "end": "2026-05-07", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-05-08", "end": "2026-05-10", "custodian": "mom", "reason": "mothers_day"}, {"start": "2026-05-11", "end": "2026-05-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-05-14", "end": "2026-05-14", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-05-15", "end": "2026-05-17", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-05-18", "end": "2026-05-20", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-05-21", "end": "2026-06-18", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2026-06-19", "end": "2026-06-21", "custodian": "dad", "reason": "fathers_day"}, {"start": "2026-06-22", "end": "2026-06-30", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2026-07-01", "end": "2026-07-30", "custodian": "dad", "reason": "summer_dad_30_days"}, {"start": "2026-07-31", "end": "2026-08-17", "custodian": "mom", "reason": "summer_mom_after_dad"}, {"start": "2026-08-18", "end": "2026-08-19", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-08-20", "end": "2026-08-20", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-08-21", "end": "2026-08-23", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-08-24", "end": "2026-08-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-08-27", "end": "2026-08-27", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-08-28", "end": "2026-08-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-08-29", "end": "2026-08-30", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-08-31", "end": "2026-09-02", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-03", "end": "2026-09-03", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-04", "end": "2026-09-06", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-09-07", "end": "2026-09-07", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-09-08", "end": "2026-09-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-10", "end": "2026-09-10", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-11", "end": "2026-09-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-12", "end": "2026-09-13", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-09-14", "end": "2026-09-16", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-17", "end": "2026-09-17", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-18", "end": "2026-09-20", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-09-21", "end": "2026-09-21", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-09-22", "end": "2026-09-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-24", "end": "2026-09-24", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-09-25", "end": "2026-09-25", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-09-26", "end": "2026-09-27", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-09-28", "end": "2026-09-30", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-01", "end": "2026-10-01", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-02", "end": "2026-10-04", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-10-05", "end": "2026-10-07", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-08", "end": "2026-10-08", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-09", "end": "2026-10-12", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-10-13", "end": "2026-10-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-15", "end": "2026-10-15", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-16", "end": "2026-10-18", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-10-19", "end": "2026-10-19", "custodian": "dad", "reason": "noschool_day"}, {"start": "2026-10-20", "end": "2026-10-21", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-22", "end": "2026-10-22", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-23", "end": "2026-10-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-24", "end": "2026-10-25", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-10-26", "end": "2026-10-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-10-29", "end": "2026-10-29", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-10-30", "end": "2026-11-01", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-11-02", "end": "2026-11-04", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-05", "end": "2026-11-05", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-11-06", "end": "2026-11-08", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-11-09", "end": "2026-11-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-12", "end": "2026-11-12", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-11-13", "end": "2026-11-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-14", "end": "2026-11-15", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-11-16", "end": "2026-11-18", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-11-19", "end": "2026-11-19", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-11-20", "end": "2026-11-20", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-11-21", "end": "2026-11-27", "custodian": "mom", "reason": "thanksgiving"}, {"start": "2026-11-28", "end": "2026-11-29", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-11-30", "end": "2026-12-02", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-03", "end": "2026-12-03", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-12-04", "end": "2026-12-06", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2026-12-07", "end": "2026-12-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-10", "end": "2026-12-10", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2026-12-11", "end": "2026-12-11", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-12", "end": "2026-12-13", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2026-12-14", "end": "2026-12-16", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2026-12-17", "end": "2026-12-28", "custodian": "dad", "reason": "christmas_first_half"}, {"start": "2026-12-29", "end": "2027-01-05", "custodian": "mom", "reason": "christmas_second_half"}, {"start": "2027-01-06", "end": "2027-01-06", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-07", "end": "2027-01-07", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-08", "end": "2027-01-08", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-09", "end": "2027-01-10", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-01-11", "end": "2027-01-13", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-14", "end": "2027-01-14", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-15", "end": "2027-01-17", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-01-18", "end": "2027-01-18", "custodian": "dad", "reason": "noschool_day"}, {"start": "2027-01-19", "end": "2027-01-20", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-21", "end": "2027-01-21", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-22", "end": "2027-01-22", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-23", "end": "2027-01-24", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-01-25", "end": "2027-01-27", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-01-28", "end": "2027-01-28", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-01-29", "end": "2027-01-31", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-02-01", "end": "2027-02-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-04", "end": "2027-02-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-05", "end": "2027-02-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-02-08", "end": "2027-02-10", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-11", "end": "2027-02-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-12", "end": "2027-02-15", "custodian": "dad", "reason": "noschool_day"}, {"start": "2027-02-16", "end": "2027-02-17", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-18", "end": "2027-02-18", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-19", "end": "2027-02-21", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-02-22", "end": "2027-02-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-25", "end": "2027-02-25", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-02-26", "end": "2027-02-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-02-27", "end": "2027-02-28", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-03-01", "end": "2027-03-03", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-03-04", "end": "2027-03-04", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-03-05", "end": "2027-03-07", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-03-08", "end": "2027-03-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-03-10", "end": "2027-03-10", "custodian": "mom", "reason": "noschool_day"}, {"start": "2027-03-11", "end": "2027-03-11", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-03-12", "end": "2027-03-19", "custodian": "mom", "reason": "spring_break"}, {"start": "2027-03-20", "end": "2027-03-21", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-03-22", "end": "2027-03-24", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-03-25", "end": "2027-03-25", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-03-26", "end": "2027-03-26", "custodian": "dad", "reason": "noschool_day"}, {"start": "2027-03-27", "end": "2027-03-28", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-03-29", "end": "2027-03-31", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-01", "end": "2027-04-01", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-02", "end": "2027-04-04", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-04-05", "end": "2027-04-07", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-08", "end": "2027-04-08", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-09", "end": "2027-04-09", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-10", "end": "2027-04-11", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-04-12", "end": "2027-04-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-15", "end": "2027-04-15", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-16", "end": "2027-04-18", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-04-19", "end": "2027-04-21", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-22", "end": "2027-04-22", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-23", "end": "2027-04-23", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-24", "end": "2027-04-25", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-04-26", "end": "2027-04-28", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-04-29", "end": "2027-04-29", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-04-30", "end": "2027-05-02", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-05-03", "end": "2027-05-05", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-06", "end": "2027-05-06", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-05-07", "end": "2027-05-09", "custodian": "mom", "reason": "mothers_day"}, {"start": "2027-05-10", "end": "2027-05-12", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-13", "end": "2027-05-13", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-05-14", "end": "2027-05-14", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-15", "end": "2027-05-16", "custodian": "mom", "reason": "mom_weekend"}, {"start": "2027-05-17", "end": "2027-05-19", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-20", "end": "2027-05-20", "custodian": "dad", "reason": "espo_thursday"}, {"start": "2027-05-21", "end": "2027-05-23", "custodian": "dad", "reason": "espo_weekend"}, {"start": "2027-05-24", "end": "2027-05-26", "custodian": "mom", "reason": "regular_school_day"}, {"start": "2027-05-27", "end": "2027-06-17", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2027-06-18", "end": "2027-06-20", "custodian": "dad", "reason": "fathers_day"}, {"start": "2027-06-21", "end": "2027-06-30", "custodian": "mom", "reason": "summer_mom_before_dad"}, {"start": "2027-07-01", "end": "2027-07-30", "custodian": "dad", "reason": "summer_dad_30_days"}];
+let lang = 'en';
+let mode = 'espo'; // default to ESPO
+let displayedYear = new Date().getFullYear();
+let displayedMonth = new Date().getMonth();
 
-    const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    const MONTHS_CN = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-    const WEEKDAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-    const WEEKDAYS_CN = ['周日','周一','周二','周三','周四','周五','周六'];
+document.getElementById('espoBtn').onclick = () => {
+  mode = 'espo';
+  document.getElementById('espoBtn').classList.add('active');
+  document.getElementById('spoBtn').classList.remove('active');
+  displayAllMonths();
+};
+document.getElementById('spoBtn').onclick = () => {
+  mode = 'spo';
+  document.getElementById('spoBtn').classList.add('active');
+  document.getElementById('espoBtn').classList.remove('active');
+  displayAllMonths();
+};
 
-    let lang = 'en';
-    function setLang(l) { lang = l; document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.textContent === (l === 'en' ? 'EN' : '中文'))); generateESPOCalendar(lang); generateSPOCalendar(lang); }
-    function showSection(s) { document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.textContent.toLowerCase().includes(s))); document.getElementById('spoContainer').classList.toggle('active', s === 'spo'); document.getElementById('espoContainer').classList.toggle('active', s === 'espo'); }
+function getActiveIntervals() {
+  return mode === 'espo' ? ESPO_INTERVALS : SPO_INTERVALS;
+}
 
-    function isSchoolYearEven(yr) { return yr % 2 === 0; }
-    function getSchoolYear(dateStr) { const [y,m] = dateStr.split('-').map(Number); return m >= 8 ? y : y - 1; }
+function queryCustodian(d) {
+  const target = new Date(d);
+  const intervals = getActiveIntervals();
+  for (const iv of intervals) {
+    const s = new Date(iv.start);
+    const e = new Date(iv.end);
+    if (s <= target && target <= e) return iv.custodian;
+    if (s > target) break;
+  }
+  return null;
+}
 
-    function isSchoolBreak(dateStr) {
-        const d = new Date(dateStr);
-        for (const br of schoolBreaks) {
-            if (d >= new Date(br.start) && d <= new Date(br.end)) return br;
-        }
-        return null;
+function queryLabel(d) {
+  const target = new Date(d);
+  const intervals = getActiveIntervals();
+  for (const iv of intervals) {
+    const s = new Date(iv.start);
+    const e = new Date(iv.end);
+    if (s <= target && target <= e) return iv.reason;
+    if (s > target) break;
+  }
+  return null;
+}
+
+function fmtDate(d) { return d.toISOString().slice(0, 10); }
+
+function displayAllMonths() {
+  const container = document.getElementById('calendar');
+  container.innerHTML = '';
+
+  // Determine the display range: from Aug of the prior school year through Dec after current school year
+  // This ensures we see Aug previous year → current month → Aug next year
+  const now = new Date();
+  const nowYear = now.getFullYear();
+  const nowMonth = now.getMonth(); // 0-indexed (March = 2)
+
+  // Show current school year (containing today) + following school year.
+  // Use a wide range; the DATA_END_MONTH cap below handles truncation to actual data.
+  let displayStart, displayEnd;
+  if (nowMonth >= 7) {
+    // In Aug-Dec: current SY started Aug nowYear, ends May nowYear+1
+    displayStart = new Date(nowYear, 7, 1);
+    displayEnd   = new Date(nowYear + 3, 0, 1);   // wide range; cap will truncate
+  } else {
+    // In Jan-Jul: current SY started Aug nowYear-1, ends May nowYear
+    displayStart = new Date(nowYear - 1, 7, 1);
+    displayEnd   = new Date(nowYear + 2, 0, 1);   // wide range; cap will truncate
+  }
+  // Cap display at the last month that has interval data.
+  // Derived dynamically from the intervals so this stays correct as data grows.
+  const DATA_END_MONTH = (() => {
+    const intervals = getActiveIntervals();
+    let latest = null;
+    for (const iv of intervals) {
+      const e = new Date(iv.end);
+      if (!latest || e > latest) latest = e;
+    }
+    return latest ? new Date(latest.getFullYear(), latest.getMonth() + 1, 1) : new Date(2027, 6, 1);
+  })();
+  if (displayEnd > DATA_END_MONTH) { displayEnd = DATA_END_MONTH; }
+
+  const monthsToShow = [];
+  let cur = new Date(displayStart);
+  while (cur <= displayEnd) {
+    monthsToShow.push({ year: cur.getFullYear(), month: cur.getMonth() });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  for (const m of monthsToShow) { renderMonth(m.year, m.month); }
+}
+
+function renderMonth(year, month) {
+  const container = document.getElementById('calendar');
+  // NOTE: container.innerHTML is NOT cleared here — displayAllMonths() clears once before looping
+  const t = I18N[lang];
+  document.getElementById('curRange').textContent = t.months[month] + ' ' + year;
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const startPad = firstDay.getDay();
+
+  const monthDiv = document.createElement('div');
+  monthDiv.className = 'month-box';
+
+  const title = document.createElement('div');
+  title.className = 'month-title';
+  title.textContent = t.months[month] + ' ' + year;
+  monthDiv.appendChild(title);
+
+  const dhDiv = document.createElement('div');
+  dhDiv.className = 'day-headers';
+  t.weekdays.forEach(w => {
+    const d = document.createElement('div');
+    d.className = 'dh';
+    d.textContent = w;
+    dhDiv.appendChild(d);
+  });
+  monthDiv.appendChild(dhDiv);
+
+  const grid = document.createElement('div');
+  grid.className = 'days-grid';
+
+  for (let i = 0; i < startPad; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'day empty';
+    grid.appendChild(cell);
+  }
+
+  const today = new Date();
+  for (let d = 1; d <= lastDay.getDate(); d++) {
+    const cell = document.createElement('div');
+    const cellDate = new Date(year, month, d);
+    const dateStr = fmtDate(cellDate);
+    const custodian = queryCustodian(dateStr);
+    const reason = queryLabel(dateStr);
+    const isDec28 = (year % 4 === 0 ? year : year) && month === 11 && d === 28;
+
+    cell.className = 'day';
+    if (custodian) cell.classList.add(custodian);
+    if (reason) cell.classList.add('reason-' + reason);
+    if (year === today.getFullYear() && month === today.getMonth() && d === today.getDate()) {
+      cell.classList.add('today');
     }
 
-    function isNoSchoolDay(dateStr) { return noSchoolSet.has(dateStr); }
+    // Dec 28: render as split cell (AM=first_parent, PM=second_parent)
+    if (isDec28 && reason && reason.includes('christmas')) {
+      cell.className = 'day split';
+      cell.textContent = '';
 
-    function getChristmasCustody(dateStr) {
-        const [y,m,d] = dateStr.split('-').map(Number);
-        const sy = m >= 8 ? y : y - 1;
-        const evenSY = isSchoolYearEven(sy);
-        const xYear = m <= 4 ? sy : y;
-        for (const br of schoolBreaks) {
-            if (br.label.en !== 'Winter Break' && br.label.cn !== '寒假') continue;
-            const [bsy,bsm] = br.start.split('-').map(Number);
-            if (bsm !== 12 || bsy !== xYear) continue;
-            const [xey,xem,xed] = br.end.split('-').map(Number);
-            const xStart = new Date(bsy,bsm-1,bsm===12?br.start.split('-')[2]:1);
-            const xEnd = new Date(xey,xem-1,xed);
-            if (d >= xStart && d <= xEnd) {
-                if (m === 12 && d === 28) return evenSY ? 'dad' : 'mom';
-                if (m === 12 && d < 28) return evenSY ? 'dad' : 'mom';
-                return evenSY ? 'mom' : 'dad';
-            }
-        }
-        return 'none';
+      // Find AM custodian: the custodian of the Christmas first-half interval
+      const amCustodian = custodian; // Dec 28 is last day of first half → same as custodian
+      const pmCustodian = amCustodian === 'dad' ? 'mom' : 'dad';
+
+      const amDiv = document.createElement('div');
+      amDiv.className = 'am ' + amCustodian;
+      amDiv.textContent = amCustodian === 'dad' ? t.dad : t.mom;
+
+      const sep = document.createElement('div');
+      sep.className = 'sep';
+
+      const pmDiv = document.createElement('div');
+      pmDiv.className = 'pm ' + pmCustodian;
+      pmDiv.textContent = pmCustodian === 'dad' ? t.dad : t.mom;
+
+      cell.appendChild(amDiv);
+      cell.appendChild(sep);
+      cell.appendChild(pmDiv);
+
+      const tip = document.createElement('div');
+      tip.className = 'tooltip';
+      tip.textContent = t['christmas_split'] || '§153.314 Split · Noon Dec 28';
+      cell.appendChild(tip);
+    } else {
+      cell.textContent = d;
+      const tip = document.createElement('div');
+      tip.className = 'tooltip';
+      if (custodian) {
+        const who = t[custodian];
+        const what = reason ? (t[reason] || reason) : who;
+        tip.textContent = who + ': ' + what;
+      } else {
+        tip.textContent = dateStr;
+      }
+      cell.appendChild(tip);
     }
+    grid.appendChild(cell);
+  }
 
-    function getThanksgivingCustody(dateStr) {
-        const [y,m,d] = dateStr.split('-').map(Number);
-        const sy = m >= 8 ? y : y - 1;
-        const evenSY = isSchoolYearEven(sy);
-        for (const br of schoolBreaks) {
-            if (br.label.en !== 'Fall Break' && br.label.cn !== '秋假') continue;
-            const [sy2,sm2,sd2] = br.start.split('-').map(Number);
-            const [ey2,em2,ed2] = br.end.split('-').map(Number);
-            const start = new Date(sy2,sm2-1,sd2);
-            const end = new Date(ey2,em2-1,ed2);
-            const dd = new Date(y,m-1,d);
-            if (dd >= start && dd <= end) {
-                const dow = dd.getDay();
-                // First half: Mon, Tue, Wed (dow 1,2,3) -> first parent
-                // Second half: Thu, Fri (dow 4,5) -> second parent
-                const mid = new Date(start); mid.setDate(mid.getDate() + Math.floor((end - start) / 86400000 / 2));
-                return dd <= mid ? (evenSY ? 'mom' : 'dad') : (evenSY ? 'dad' : 'mom');
-            }
-        }
-        return 'none';
-    }
+  monthDiv.appendChild(grid);
+  container.appendChild(monthDiv);
+}
 
-    function getSchoolBreakCustody(dateStr) {
-        const [y,m,d] = dateStr.split('-').map(Number);
-        const sy = m >= 8 ? y : y - 1;
-        const evenSY = isSchoolYearEven(sy);
-        const xYear = m <= 4 ? sy : y;
-        for (const br of schoolBreaks) {
-            if (br.label.en === 'Fall Break' || br.label.cn === '秋假') {
-                const [sy2,sm2,sd2] = br.start.split('-').map(Number);
-                const [ey2,em2,ed2] = br.end.split('-').map(Number);
-                const start = new Date(sy2,sm2-1,sd2);
-                const end = new Date(ey2,em2-1,ed2);
-                const dd = new Date(y,m-1,d);
-                if (dd >= start && dd <= end) {
-                    const mid = new Date(start); mid.setDate(mid.getDate() + Math.floor((end - start) / 86400000 / 2));
-                    return dd <= mid ? (evenSY ? 'mom' : 'dad') : (evenSY ? 'dad' : 'mom');
-                }
-            }
-            if (br.label.en === 'Winter Break' || br.label.cn === '寒假') {
-                const [bsy,bsm] = br.start.split('-').map(Number);
-                if (bsm !== 12 || bsy !== xYear) continue;
-                const [bsd] = br.start.split('-').map(Number);
-                const [xey,xem,xed] = br.end.split('-').map(Number);
-                const xStart = new Date(bsy,bsm-1,bsd);
-                const xEnd = new Date(xey,xem-1,xed);
-                const dd = new Date(y,m-1,d);
-                if (dd >= xStart && dd <= xEnd) {
-                    if (m === 12 && d === 28) return evenSY ? 'dad' : 'mom';
-                    if (m === 12 && d < 28) return evenSY ? 'dad' : 'mom';
-                    return evenSY ? 'mom' : 'dad';
-                }
-            }
-            if (br.label.en === 'Spring Break' || br.label.cn === '春假') {
-                const [sby,sbm,sbd] = br.start.split('-').map(Number);
-                const [eby,ebm,ebd] = br.end.split('-').map(Number);
-                const sStart = new Date(sby,sbm-1,sbd);
-                const sEnd = new Date(eby,ebm-1,ebd);
-                const dd = new Date(y,m-1,d);
-                if (dd >= sStart && dd <= sEnd) return evenSY ? 'mom' : 'dad';
-            }
-        }
-        return 'none';
-    }
+document.getElementById('prevBtn').onclick = () => {
+  window.scrollTo({ top: 0, behavior: 'smooth'});
+};
+document.getElementById('nextBtn').onclick = () => {
+  window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth'});
+};
+document.getElementById('langToggle').onclick = () => {
+  lang = lang === 'en' ? 'cn' : 'en';
+  document.getElementById('title').textContent = I18N[lang].title;
+  document.getElementById('splitLegend').textContent = I18N[lang]['christmas_split'] || I18N['en']['christmas_split'];
+  displayAllMonths();
+};
+document.getElementById('espoBtn').onclick = () => {
+  if (mode !== 'espo') {
+    mode = 'espo';
+    document.getElementById('espoBtn').classList.add('active');
+    document.getElementById('spoBtn').classList.remove('active');
+    displayAllMonths();
+  }
+};
+document.getElementById('spoBtn').onclick = () => {
+  if (mode !== 'spo') {
+    mode = 'spo';
+    document.getElementById('spoBtn').classList.add('active');
+    document.getElementById('espoBtn').classList.remove('active');
+    displayAllMonths();
+  }
+};
 
-    function getNationalHolidayLabel(year, month, day) {
-        for (const h of nationalHolidays) {
-            if (h.month !== month || (h.year && h.year !== year)) continue;
-            if (h.day && h.day === day) return h.label;
-            if (h.monday) { const d = new Date(year,month,1); let count=0; for(let i=0;i<31;i++){ const dd=new Date(year,month,i+1); if(dd.getDay()===1){count++;if(count===h.monday&&dd.getDate()===day)return h.label;}} }
-            if (h.friday) { const d = new Date(year,month,1); let count=0; for(let i=0;i<31;i++){ const dd=new Date(year,month,i+1); if(dd.getDay()===5){count++;if(count===h.friday&&dd.getDate()===day)return h.label;}} }
-        }
-        return null;
-    }
-
-    function generateSPOCalendar() {
-        const container = document.getElementById('spoContainer');
-        container.innerHTML = '';
-        const y0 = new Date().getFullYear();
-        const years = [y0, y0+1];
-        let html = '';
-        for (const yr of years) {
-            for (let mo=0; mo<12; mo++) {
-                const firstDay = new Date(yr, mo, 1);
-                const lastDate = new Date(yr, mo+1, 0).getDate();
-                const startPad = firstDay.getDay();
-                const mname = lang === 'en' ? MONTHS[mo] : MONTHS_CN[mo];
-                html += `<div class="month-calendar"><h3>${mname} ${yr}</h3>`;
-                const wds = lang === 'en' ? WEEKDAYS : WEEKDAYS_CN;
-                html += `<div class="cal-weekdays">${wds.map(w=>`<div>${w}</div>`).join('')}</div>`;
-                html += `<div class="cal-days">`;
-                for (let i=0;i<startPad;i++) html+=`<div class="cal-day other-month"><div class="day-num"></div></div>`;
-                for (let d=1; d<=lastDate; d++) {
-                    const dateStr = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                    const dow = new Date(yr, mo, d).getDay();
-                    const breakInfo = isSchoolBreak(dateStr);
-                    const isThursday = dow === 4;
-                    const isFriday = dow === 5;
-                    const isSaturday = dow === 6;
-                    const isSunday = dow === 0;
-                    let cls = 'dad', label = lang==='cn'?'爸爸6-8pm':'Dad 6-8pm';
-                    if (isThursday) { cls='dad'; label=lang==='cn'?'爸爸6-8pm':'Dad 6-8pm'; }
-                    else if (isFriday || isSaturday || isSunday) { cls='mom'; label=''; }
-                    else { cls='mom'; label=''; }
-                    html += `<div class="cal-day ${cls}"><div class="day-num">${d}</div><div class="day-label">${label}</div></div>`;
-                }
-                html += `</div></div>`;
-            }
-        }
-        container.innerHTML = html;
-    }
-
-    function generateESPOCalendar() {
-        const container = document.getElementById('espoContainer');
-        container.innerHTML = '';
-        const y0 = new Date().getFullYear();
-        const years = [y0, y0+1];
-        let html = '';
-        for (const yr of years) {
-            for (let mo=0; mo<12; mo++) {
-                const firstDay = new Date(yr, mo, 1);
-                const lastDate = new Date(yr, mo+1, 0).getDate();
-                const startPad = firstDay.getDay();
-                const mname = lang === 'en' ? MONTHS[mo] : MONTHS_CN[mo];
-                html += `<div class="month-calendar"><h3>${mname} ${yr}</h3>`;
-                const wds = lang === 'en' ? WEEKDAYS : WEEKDAYS_CN;
-                html += `<div class="cal-weekdays">${wds.map(w=>`<div>${w}</div>`).join('')}</div>`;
-                html += `<div class="cal-days">`;
-                for (let i=0;i<startPad;i++) html+=`<div class="cal-day other-month"><div class="day-num"></div></div>`;
-                for (let d=1; d<=lastDate; d++) {
-                    const dateStr = `${yr}-${String(mo+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-                    const dow = new Date(yr, mo, d).getDay();
-                    const breakInfo = isSchoolBreak(dateStr);
-                    const natHoliday = getNationalHolidayLabel(yr, mo, d);
-                    let cls='mom', label='';
-                    if (breakInfo) {
-                        const bc = getSchoolBreakCustody(dateStr);
-                        cls = bc; label = breakInfo.label[lang] || breakInfo.label.en;
-                    } else if (natHoliday) {
-                        cls = yr % 2 === 1 ? 'dad' : 'mom';
-                        label = natHoliday[lang] || natHoliday.en;
-                    } else if (isNoSchoolDay(dateStr)) {
-                        cls = yr % 2 === 1 ? 'dad' : 'mom';
-                        label = 'No School';
-                    }
-                    html += `<div class="cal-day ${cls}"><div class="day-num">${d}</div><div class="day-label">${label}</div></div>`;
-                }
-                html += `</div></div>`;
-            }
-        }
-        container.innerHTML = html;
-    }
-
-    generateSPOCalendar();
-    generateESPOCalendar();
-    </script>
+// Render ESPO calendar immediately on page load (before any button interaction)
+mode = 'espo';
+displayAllMonths();
+document.getElementById('espoBtn').classList.add('active');
+</script>
 </body>
 </html>
