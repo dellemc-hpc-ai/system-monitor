@@ -2,6 +2,8 @@
 
 Generate bilingual (EN/CN) custody calendars from any US school district calendar, using **Texas §153.312/313/314** custody rules. Supports both **SPO** (Standard Possession Order) and **ESPO** (Extended SPO) modes.
 
+**Live demo: https://hanyunfan.github.io/hermes/school-calendar-portal/**
+
 **Core innovation: interval-based calculation — pre-computes custody intervals upfront, O(log n) query. No day-by-day iteration.**
 
 ---
@@ -25,7 +27,7 @@ Rule Builder → custody_rules.json
     ↓
 Custody Calculator → custody_intervals.json (SPO + ESPO)
     ↓
-HTML Generator → custody_school_calendar.html  ← GitHub Pages root
+HTML Generator → index.html  ← GitHub Pages root
 ```
 
 ---
@@ -100,7 +102,7 @@ python scripts/main.py
 python scripts/main.py --address "900 Round Rock Blvd, Round Rock, TX" --district "Round Rock ISD" --debug
 ```
 
-The output HTML is written to the repo root (`school-calendar-portal/custody_school_calendar.html`) and served by GitHub Pages at the same path.
+The output HTML is written to `index.html` and served by GitHub Pages at the repo root (`school-calendar-portal/index.html`). The live demo is at https://hanyunfan.github.io/hermes/school-calendar-portal/.
 
 ---
 
@@ -135,37 +137,40 @@ Every custody rule comes from the statute template (`config/state_statute_templa
 
 ### Holiday Priority (lowest number wins)
 
-The system assigns a **priority** to every interval type. When a date falls in multiple intervals (e.g., both an ESPO Thursday and summer break), the interval with the **lower priority number** wins. This is the `date_winner` approach — clean, predictable, zero double-assignment.
+The system assigns a **priority** to every interval type. When a date falls in multiple intervals (e.g., both an ESPO Thursday and a noschool day), the interval with the **lower priority number** wins. This is the `date_winner` approach — clean, predictable, zero double-assignment.
 
 | Priority | Interval Type | Reason |
-|----------|--------------|--------|
+|----------|----------|--------------|
 | 1 | `fathers_day`, `mothers_day` | Parent holidays — absolute top |
-| 2 | `spring_break` | Major school break |
+| 2 | `spring_break` | Major school break — starts on the **last school day** before spring vacation per §153.312(b)(1) |
 | 3 | `thanksgiving` | Major holiday break |
 | 4 | `christmas` | Major holiday break |
 | 5 | `summer_*` | Longest break of year |
 | 6 | `noschool_day` | Single-day no-school events |
-| 7 | `espo_thursday` | ESPO weekly Thursday |
-| 8 | `espo_weekend` | ESPO weekly Fri eve |
-| 9 | `mom_weekend` | Mom's weekend |
-| 10 | `regular_school_day` | Fallback — Dad's default day |
+| 7 | `espo_thursday` | ESPO weekly Thursday overnight |
+| 8 | `espo_weekend` | ESPO 1st/3rd/5th Friday weekend |
+| 9 | `mom_weekend` | Mom's 2nd/4th Saturday+Sunday weekend |
+| 10 | `regular_school_day` | Fallback — Mom's default day |
 
 **Key invariants:**
 - Priority 1–5 are school breaks; priority 6–10 are regular/repeating intervals
 - A date can never belong to two intervals — `date_winner` always picks exactly one
-- All 280+ intervals in a typical year are conflict-free by construction
+- All 276+ intervals in a typical year are conflict-free by construction
 
 ### TX §153.314 Rules
 
 | Period | Odd Year | Even Year |
 |--------|----------|-----------|
-| Thanksgiving | Dad first half | Mom first half |
-| Christmas (15+15 days) | Dad first half | Mom first half |
-| Spring Break | Mom | Dad |
-| Summer (Jul 1-30) | Dad | Dad |
+| Thanksgiving (§153.314(3)) | Dad (possessory) whole period | Mom (managing) whole period |
+| Christmas (§153.314(1)(2)) | Mom first half, Dad second half | Dad first half, Mom second half |
+| Spring Break (§153.312(b)(1)) | Mom | Dad |
+| Summer (§153.312(b)(2)) | Dad (30 consecutive days) | Dad (30 consecutive days) |
 | Other noschool days | Dad | Mom |
 
+**Spring Break detail:** Per §153.312(b)(1), the custody period is "6pm the day school is dismissed for spring vacation to 6pm the day before school resumes." The period starts on the **last school day** before spring break (not the first day of the school's spring break calendar), and ends the **day before school resumes** (not on the last day of school vacation). Weekend days are skipped when finding the last school day.
+
 ESPO regular school days: Mon/Tue/Wed/Fri → Mom, Thu → Dad.
+Mom's weekend: 2nd and 4th Saturday+Sunday of each month (indexed by Friday position).
 
 ---
 
