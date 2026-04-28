@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
 Pollen Report Scraper - Linux Version
-Austin, TX 78750 | lat=30.4403525, lng=-97.81407276
+Auto-detects location via IP geolocation, falls back to Austin TX defaults.
 
 Data sources:
   1. GPS (pollencount.app / AccuWeather): lat/lng based
-  2. ZIP  (pollen.com via CDP): species-level data for Austin 78750
+  2. ZIP  (pollen.com via CDP): species-level data for detected or default ZIP
 
 Usage:
   python3 scrape.py [--output FILE] [--html FILE]
@@ -20,26 +20,61 @@ import sys
 import urllib.request
 from datetime import datetime
 
-# --- Config ---
-GPS_LAT = 30.4403525
-GPS_LNG = -97.81407276
-ZIP_CODE = "78750"
+# ─── Defaults (Austin TX 78750) ─────────────────────────────────────────────────
+DEFAULT_LAT = 30.4403525
+DEFAULT_LNG = -97.81407276
+DEFAULT_ZIP = "78750"
+DEFAULT_CITY = "Austin, TX 78750"
+DEFAULT_SOURCE_NAME = "pollencount.app (10625 Glass Mountain)"
+
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 OUTPUT_JSON = os.path.join(DATA_DIR, "pollen-data.json")
 DEFAULT_HTML = os.path.join(DATA_DIR, "today.html")
 ZIP_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pollen_com_cdp.py")
 
-POLLEN_API_GPS = f"https://pollencount.app/api/getForecast?lat={GPS_LAT}&lng={GPS_LNG}"
 AQI_API = "https://api.waqi.info/feed/geo:30.4403;-97.814/?token=demo"
+
+
+# ─── Location Detection ──────────────────────────────────────────────────────────
+
+def detect_location():
+    """Detect lat/lng/zip from current IP via ip-api.com (free, no key needed).
+    Returns (lat, lng, zip, city) on success, None on failure.
+    Falls back to defaults silently.
+    """
+    try:
+        req = urllib.request.Request(
+            "http://ip-api.com/json/?fields=status,country,region,regionName,city,zip,lat,lon",
+            headers={"User-Agent": "Mozilla/5.0 (PollenReport/1.0)"}
+        )
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode())
+        if data.get("status") != "success":
+            return None
+        lat = data.get("lat")
+        lng = data.get("lon")
+        zip_code = data.get("zip") or ""
+        city = f"{data.get('city', '')}, {data.get('regionName', '')} {zip_code}".strip()
+        if lat and lng:
+            print(f"[Location] Detected: {city} ({lat}, {lng})")
+            return {
+                "lat": lat, "lng": lng,
+                "zip": zip_code or DEFAULT_ZIP,
+                "city": city,
+            }
+    except Exception as e:
+        print(f"[Location] Detection failed: {e}, using defaults")
+    return None
 
 
 # ─── GPS source: AccuWeather via pollencount.app ──────────────────────────────────
 
-def fetch_gps_data():
+def fetch_gps_data(lat, lng):
     """Fetch pollen/weather data from AccuWeather (GPS-based)."""
-    print("Fetching GPS data from pollencount.app...")
+    url = f"https://pollencount.app/api/getForecast?lat={lat}&lng={lng}"
+    print(f"Fetching GPS data from pollencount.app...")
     req = urllib.request.Request(
-        POLLEN_API_GPS,
+        url,
         headers={"User-Agent": "Mozilla/5.0 (compatible; PollenReport/1.0)"}
     )
     try:
@@ -50,11 +85,11 @@ def fetch_gps_data():
         return None
 
 
-def parse_gps_data(raw):
+def parse_gps_data(raw, source_name):
     """Parse AccuWeather getForecast response into structured dict."""
     result = {
         "source": "GPS (AccuWeather)",
-        "source_name": "pollencount.app (10625 Glass Mountain)",
+        "source_name": source_name,
     }
     forecasts = raw.get("DailyForecasts", [])
     if not forecasts:
@@ -100,17 +135,17 @@ def parse_gps_data(raw):
 
 # ─── ZIP source: pollen.com via Chrome CDP ────────────────────────────────────────
 
-def fetch_zip_data():
+def fetch_zip_data(zip_code):
     """Fetch species-level pollen data from pollen.com via Chrome CDP.
-    Falls back to None if CDP fails.
+    Falls back to None if CDP fails or script not found.
     """
-    print("Fetching ZIP data from pollen.com via CDP...")
+    print(f"Fetching ZIP data from pollen.com ({zip_code}) via CDP...")
     if not os.path.exists(ZIP_SCRIPT):
         print(f"  CDP script not found: {ZIP_SCRIPT}")
         return None
     try:
         result = subprocess.run(
-            [sys.executable, ZIP_SCRIPT],
+            [sys.executable, ZIP_SCRIPT, zip_code],
             capture_output=True, text=True, timeout=90
         )
         if result.returncode == 0 and result.stdout.strip() and result.stdout.strip() != "null":
@@ -128,31 +163,21 @@ def fetch_zip_data():
         return None
 
 
-def parse_zip_data(raw):
-    """Parse pollen.com data into unified structure.
-    Handles CDP format: {overall_index, overall_label, top_allergens:[{name,genus,plantType}], ...}
-    Also handles old API format: {forecast: {today: {...}}}
-    """
+def parse_zip_data(raw, zip_code):
+    """Parse pollen.com data into unified structure."""
     if raw is None:
         return {}
     result = {
         "source": "ZIP (pollen.com)",
-        "source_name": "pollen.com (Austin 78750)",
+        "source_name": f"pollen.com ({zip_code})",
     }
-
-    # CDP format - species-level
     if "overall_index" in raw or "top_allergens" in raw:
         result["overall_index"] = raw.get("overall_index")
         result["overall_label"] = raw.get("overall_label", "")
         result["top_allergens"] = raw.get("top_allergens", [])
         result["yesterday"] = raw.get("yesterday", {})
         result["tomorrow"] = raw.get("tomorrow", {})
-        result["tree"] = None
-        result["grass"] = None
-        result["ragweed"] = None
-        result["mold"] = None
         return result
-
     # Old API format
     try:
         fc = raw.get("forecast", {})
@@ -181,9 +206,10 @@ def parse_zip_data(raw):
 
 # ─── AQI from WAQI ───────────────────────────────────────────────────────────────
 
-def fetch_aqi():
+def fetch_aqi(lat, lng):
+    url = f"https://api.waqi.info/feed/geo:{lat:.4f};{lng:.4f}/?token=demo"
     try:
-        req = urllib.request.Request(AQI_API, headers={"User-Agent": "Mozilla/5.0"})
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
             if data.get("status") == "ok":
@@ -203,7 +229,6 @@ def fetch_aqi():
 CAT_ORDER = {"very high": 0, "high": 1, "moderate": 2, "low": 3, "very low": 4, "": 5}
 
 def severity_pollen(value, category):
-    """Return (label, color) for a pollen value and category."""
     if value is None:
         return "-", "gray"
     cat = (category or "").lower()
@@ -218,9 +243,6 @@ def severity_pollen(value, category):
 
 
 def top_allergens(gps):
-    """Return sorted allergens (name, value, category, color).
-    Sorted by API severity category, then by raw value as tiebreaker.
-    """
     allergens = []
     for key, label in [
         ("tree", "Tree"),
@@ -254,17 +276,12 @@ def severity_aqi(aqi):
 
 
 def source_block(data, is_gps=True):
-    """Build a source card with per-type pollen rows.
-    Marks the top contributor (highest raw value) with a star.
-    """
     tag = "GPS" if is_gps else "ZIP"
     tag_class = "gps" if is_gps else "zip"
-    loc = "10625 Glass Mountain Trl, Austin TX 78750" if is_gps else "Austin TX 78750 (ZIP)"
+    loc = data.get("source_name", "Unknown location")
     src = "AccuWeather (pollencount.app)" if is_gps else "pollen.com"
-
     allergen_vals = {k: data.get(k, 0) or 0 for k in ["tree", "grass", "ragweed", "mold"]}
     top_key = max(allergen_vals, key=allergen_vals.get) if any(allergen_vals.values()) else None
-
     rows_html = ""
     for key, icon in [("tree", "🌳"), ("grass", "🌾"), ("ragweed", "🌼"), ("mold", "🍄")]:
         val = data.get(key)
@@ -280,7 +297,6 @@ def source_block(data, is_gps=True):
                     <span class="badge {col}">{cat_disp}</span>
                 </div>
             </div>"""
-
     return f"""
         <div class="source-card">
             <div class="source-header">
@@ -294,18 +310,12 @@ def source_block(data, is_gps=True):
 
 
 def zip_species_block(zipd):
-    """Build a pollen.com species-level breakdown card for the ZIP source.
-    Shows top allergens with genus and plant type.
-    """
     if not zipd or not zipd.get("top_allergens"):
         return ""
-
     allergens = zipd.get("top_allergens", [])
     overall_idx = zipd.get("overall_index")
     overall_lbl = zipd.get("overall_label", "")
-
     pt_colors = {"Tree": "#1f6feb", "Grass": "#238636", "Weed": "#d29922", "": "#484f58"}
-
     allergen_rows = ""
     for t in allergens:
         pt = t.get("plantType", "")
@@ -316,15 +326,12 @@ def zip_species_block(zipd):
                 <span class="pollen-name">🌿 {t['name']} <span class="species-genus">({genus})</span></span>
                 <span class="badge" style="background:{pt_col}">{pt}</span>
             </div>"""
-
     idx_str = f"{overall_idx}" if overall_idx is not None else "—"
-
     return f"""
         <div class="source-card">
             <div class="source-header">
                 <span class="source-tag zip">ZIP</span>
-                <span class="source-name">pollen.com (78750)</span>
-                <span class="source-loc">Austin TX 78750</span>
+                <span class="source-name">pollen.com ({zipd.get('source_name', '').split('(')[-1].rstrip(')')})</span>
             </div>
             <div class="pollen-rows">{allergen_rows}
             </div>
@@ -336,12 +343,12 @@ def zip_species_block(zipd):
         </div>"""
 
 
-def generate_html(gps_data, zip_data, aqi):
+def generate_html(gps_data, zip_data, aqi, location):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M %Z")
+    loc_display = location.get("city", DEFAULT_CITY)
     aqi_val = aqi.get("aqi")
     aqi_cat, aqi_col = severity_aqi(aqi_val)
 
-    # Key Allergens section
     allergens = top_allergens(gps_data)
     allergen_rows = ""
     for label, val, cat, col in allergens:
@@ -355,10 +362,8 @@ def generate_html(gps_data, zip_data, aqi):
                 </div>
             </div>"""
 
-    # GPS source card
     gps_block = source_block(gps_data, is_gps=True)
 
-    # ZIP source card - species-level if available, else fallback
     if zip_data and zip_data.get("top_allergens"):
         zip_block = zip_species_block(zip_data)
     elif zip_data and zip_data.get("tree") is not None:
@@ -369,15 +374,13 @@ def generate_html(gps_data, zip_data, aqi):
             <div class="source-header">
                 <span class="source-tag zip">ZIP</span>
                 <span class="source-name">pollen.com</span>
-                <span class="source-loc">Austin TX 78750 (ZIP)</span>
+                <span class="source-loc">Species data unavailable</span>
             </div>
             <div class="pollen-unavailable">
-                <p>pollen.com data currently unavailable.</p>
-                <p style="margin-top:6px;color:#8b949e;font-size:0.82rem">Only GPS/AccuWeather data is available.</p>
+                <p>pollen.com species data currently unavailable.</p>
             </div>
         </div>"""
 
-    # Weather
     weather = ""
     if gps_data.get("temp_high"):
         weather = f"""
@@ -391,7 +394,6 @@ def generate_html(gps_data, zip_data, aqi):
             {('<p class="headline">' + gps_data["headline"] + '</p>') if gps_data.get("headline") else ''}
         </div>"""
 
-    # 5-day forecast
     fc_rows = ""
     for day in gps_data.get("forecast", []):
         fc_rows += f"""
@@ -407,7 +409,7 @@ def generate_html(gps_data, zip_data, aqi):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🌿 Austin Pollen Report</title>
+    <title>🌿 Pollen Report</title>
     <style>
         * {{ margin: 0; padding: 0; box-sizing: border-box; }}
         body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; line-height: 1.6; }}
@@ -455,9 +457,9 @@ def generate_html(gps_data, zip_data, aqi):
 </head>
 <body>
     <div class="container">
-        <h1>🌿 Austin Pollen Report</h1>
+        <h1>🌿 Pollen Report</h1>
         <p class="timestamp">{ts}</p>
-        <p class="location">📍 10625 Glass Mountain Trl, Austin TX 78750</p>
+        <p class="location">📍 {loc_display}</p>
 
         <div class="card">
             <h2>🌡️ Key Allergens Today</h2>
@@ -487,7 +489,7 @@ def generate_html(gps_data, zip_data, aqi):
             </div>{fc_rows}
         </div>
 
-        <p class="footer">Sources: AccuWeather (GPS) + pollen.com (ZIP) for Austin TX 78750</p>
+        <p class="footer">Sources: AccuWeather (GPS) + pollen.com (ZIP)</p>
     </div>
 </body>
 </html>"""
@@ -496,37 +498,51 @@ def generate_html(gps_data, zip_data, aqi):
 # ─── Main ────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Austin Pollen Report Scraper")
+    parser = argparse.ArgumentParser(description="Pollen Report Scraper")
     parser.add_argument("--output", default=OUTPUT_JSON, help="Output JSON path")
     parser.add_argument("--html", default=DEFAULT_HTML, help="Output HTML path")
     parser.add_argument("--test", action="store_true", help="Print outputs to stdout")
     args = parser.parse_args()
 
-    gps_raw = fetch_gps_data()
-    gps_data = parse_gps_data(gps_raw) if gps_raw else {}
-    zip_raw = fetch_zip_data()
-    zip_data = parse_zip_data(zip_raw)
-    aqi = fetch_aqi()
+    # 1. Detect location (falls back to Austin TX defaults)
+    detected = detect_location()
+    if detected:
+        location = detected
+    else:
+        location = {
+            "lat": DEFAULT_LAT, "lng": DEFAULT_LNG,
+            "zip": DEFAULT_ZIP, "city": DEFAULT_CITY,
+        }
+        print("[Location] Using default: Austin TX 78750")
 
-    # Key allergens (GPS-based)
+    lat = location["lat"]
+    lng = location["lng"]
+    zip_code = location["zip"]
+
+    # 2. Fetch data
+    gps_raw = fetch_gps_data(lat, lng)
+    gps_data = parse_gps_data(gps_raw, location.get("city", DEFAULT_CITY)) if gps_raw else {}
+    zip_raw = fetch_zip_data(zip_code)
+    zip_data = parse_zip_data(zip_raw, zip_code)
+    aqi = fetch_aqi(lat, lng)
+
+    # 3. Build output
     allergens = top_allergens(gps_data)
     top = allergens[0] if allergens else None
-    top_label = top[0] if top else None
-    top_val = top[1] if top else None
-    top_cat = top[2] if top else None
 
     output = {
         "timestamp": datetime.now().isoformat(),
-        "location": "10625 Glass Mountain Trl, Austin TX 78750",
+        "location": location.get("city", DEFAULT_CITY),
+        "lat": lat, "lng": lng, "zip": zip_code,
         "gps": gps_data,
         "zip": zip_data,
         "aqi": aqi,
-        "top_allergen": top_label,
-        "top_allergen_value": top_val,
-        "top_allergen_category": top_cat,
+        "top_allergen": top[0] if top else None,
+        "top_allergen_value": top[1] if top else None,
+        "top_allergen_category": top[2] if top else None,
     }
 
-    html = generate_html(gps_data, zip_data, aqi)
+    html = generate_html(gps_data, zip_data, aqi, location)
 
     if args.test:
         print(json.dumps(output, indent=2))

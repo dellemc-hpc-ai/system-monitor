@@ -68,7 +68,7 @@ async def fetch_species():
                 if data.get("id") == cmd_id[0]:
                     return data
 
-        await send("Page.navigate", {"url": "https://www.pollen.com/forecast/current/pollen/78750"})
+        await send("Page.navigate", {"url": f"https://www.pollen.com/forecast/current/pollen/{zip_code}"})
         await asyncio.sleep(6)
 
         r = await send("Runtime.evaluate", {
@@ -109,7 +109,7 @@ async def fetch_species():
         return None
 
 
-async def main():
+async def main(zip_code="78750"):
     start_chrome()
     try:
         data = await fetch_species()
@@ -122,4 +122,6 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    import sys
+    zip_arg = sys.argv[1] if len(sys.argv) > 1 else "78750"
+    asyncio.run(main(zip_arg))
