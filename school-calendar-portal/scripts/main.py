@@ -350,7 +350,7 @@ def main():
 
     # ── 8. Generate HTML (repo root for GitHub Pages) ─────────────────────────
     print("\n[8] Generating HTML...")
-    ROOT_HTML = os.path.join(BASE_DIR, "custody_school_calendar.html")
+    ROOT_HTML = os.path.join(BASE_DIR, "index.html")
     HTMLBuilder(
         district=district,
         espo_intervals=_load_intervals("espo"),
