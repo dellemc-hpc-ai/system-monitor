@@ -112,20 +112,33 @@ class CustodyCalculator:
                 br_start = date.fromisoformat(br["start"])
                 br_end_raw = date.fromisoformat(br["end"])
                 # Per TX §153.314: holiday possession ends "the day before school resumes"
-                # (same as Christmas clause 2). For spring break, extend to the Sunday
-                # before school resumes. Compute extended end once, use for both the
-                # date-range check and the returned br_data.
+                # (same as Christmas clause 2). For spring break, extend BOTH ends:
+                # - End: Sunday before school resumes (Mar 22 for 2025-2026)
+                # - Start: last school day before break (Mar 13 for 2025-2026)
+                # Days before the district break start (Mar 14-15) get reason
+                # "spring_break_pre" so they don't merge with the Mom district period.
                 if br_name == "spring":
                     resume_candidate = br_end_raw + timedelta(days=1)
                     days_until_monday = (7 - resume_candidate.weekday()) % 7
                     school_resume = resume_candidate + timedelta(days=days_until_monday)
                     br_end_extended = school_resume - timedelta(days=1)
+                    br_start_extended = self._last_school_day_before_break(br_name, sy)
+                    if br_start_extended is None:
+                        br_start_extended = br_start
                 else:
                     br_end_extended = br_end_raw
-                if br_start <= d <= br_end_extended:
+                    br_start_extended = br_start
+                if br_start_extended <= d <= br_end_extended:
                     effective_br_name = "summer" if br_name == "summer_pre_school" else br_name
                     br_data = dict(br)
                     br_data["end"] = br_end_extended.isoformat()
+                    # For spring break, tag pre/post district days with distinct names so
+                    # they don't merge with the main (district) spring break period.
+                    if br_name == "spring":
+                        if d < br_start:
+                            effective_br_name = "spring_break_pre"
+                        elif d > br_end_raw:
+                            effective_br_name = "spring_break_post"
                     return effective_br_name, br_data
 
         # Pre-school summer gap: May 22 through the day before school year starts.
@@ -152,6 +165,33 @@ class CustodyCalculator:
                 "end": effective_summer_end.isoformat()
             }
 
+        # Post-school-year summer gap: May 22-Aug 17 of the NEXT calendar year after
+        # a school year ends, when there is no school.  Only applies to dates OUTSIDE
+        # all school year ranges (e.g. Jul 2027, which falls after May 2027 SY end).
+        # If d is inside a school year (first loop already covered breaks there), skip.
+        for sy in self.school_years:
+            sy_start = date.fromisoformat(sy["start"])
+            sy_end = date.fromisoformat(sy["end"])
+            if sy_start <= d <= sy_end:
+                return None, None  # d is a school day; first loop handled breaks
+
+        for sy in self.school_years:
+            if "summer" not in sy.get("breaks", {}):
+                continue
+            br = sy["breaks"]["summer"]
+            br_start = date.fromisoformat(br["start"])
+            if br_start.month == 5 and br_start.day == 22:  # valid summer anchor
+                # Match if d is in the May 22-Aug 17 window but beyond the
+                # br_end year (e.g. Jul 2027 with br covering May-Aug 2026).
+                # May: day >= 22 only; Jun-Jul: any day; Aug: day <= 17 only.
+                in_window = (
+                    (d.month == 5 and d.day >= 22) or
+                    (d.month in (6, 7)) or
+                    (d.month == 8 and d.day <= 17)
+                )
+                if in_window:
+                    return "summer", br
+
         return None, None
 
     def _break_custodian(
@@ -168,20 +208,38 @@ class CustodyCalculator:
             return parent, "thanksgiving"
 
         elif break_name == "christmas":
-            split = date(br_start.year, 12, 28)
-            is_first_half = d <= split
-            if is_odd_year:
-                parent = (rules["holidays"]["christmas"]["odd_year_first"] if is_first_half
-                          else rules["holidays"]["christmas"]["odd_year_second"])
-            else:
-                parent = (rules["holidays"]["christmas"]["even_year_first"] if is_first_half
-                          else rules["holidays"]["christmas"]["even_year_second"])
+            # Per §153.314(1)-(2):
+            # Split at noon on December 28.
+            # First half: 6pm on dismissal day → noon Dec 28 (date = Dec 27)
+            # Second half: noon Dec 28 → day before school resumes
+            # Even year: possessory(Dad) first half, Managing(Mom) second half
+            # Odd year: Managing(Mom) first half, Possessory(Dad) second half
+            # Rules file stores first-half parent per year parity; second half is the other parent.
+            # First half: Dec 18-27 (before noon Dec 28)
+            # Second half: Dec 28-Jan 4 (on or after Dec 28)
+            # Split at noon Dec 28. First half = dates before Dec 28;
+            # second half = Dec 28 and after (through day before school resumes).
+            # Handle year-boundary: Jan dates are always second half (after noon Dec 28).
+            # For Dec dates: before Dec 28 = first half, Dec 28+ = second half.
+            # Per statute: alternation is based on "calendar year in which the
+            # Christmas vacation begins" (br_start.year), NOT the date d.year.
+            is_first_half = d.month == 12 and d.day < 28
+            is_odd_year_br = br_start.year % 2 == 1
+            yr_key = "odd_year" if is_odd_year_br else "even_year"
+            first_half_parent = rules["holidays"]["christmas"][f"{yr_key}_first"]
+            parent = first_half_parent if is_first_half else ("dad" if first_half_parent == "mom" else "mom")
             reason = "christmas_first_half" if is_first_half else "christmas_second_half"
             return parent, reason
 
         elif break_name == "spring":
             parent = rules["holidays"]["spring_break"]["odd_year" if is_odd_year else "even_year"]
             return parent, "spring_break"
+
+        elif break_name in ("spring_break_pre", "spring_break_post"):
+            # Extended spring break days: Sat/Sun before (pre) or after (post) district break.
+            # Use same odd/even year rule as regular spring break.
+            parent = rules["holidays"]["spring_break"]["odd_year" if is_odd_year else "even_year"]
+            return parent, break_name
 
         elif break_name == "summer":
             # Dad gets July 1-30; all other summer days are mom
@@ -261,16 +319,38 @@ class CustodyCalculator:
         if break_name:
             return self._break_custodian(break_name, break_data, d, is_odd_year)
 
+        # 2b. Thanksgiving: last school day BEFORE Thanksgiving = Thanksgiving day 1
+        # Per §153.314(3): possession begins the day school is dismissed BEFORE Thanksgiving.
+        # This is SEPARATE from normal breaks because Thanksgiving is a noschool_day period,
+        # not a formal "break" in the calendar data.
+        tg_start, tg_end = self._thanksgiving_period(d)
+        if tg_start is not None:
+            if d == tg_start:
+                parent = rules["holidays"]["thanksgiving"]["odd_year" if is_odd_year else "even_year"]
+                return parent, "thanksgiving"
+
+        # 3b. Thanksgiving days within the period (last school day → Sunday after)
+        if tg_start is not None and tg_start < d <= tg_end:
+            parent = rules["holidays"]["thanksgiving"]["odd_year" if is_odd_year else "even_year"]
+            return parent, "thanksgiving"
+
         # 4. Extended Weekend Rule (per §153.314(e))
         # Only applies on 1st/3rd/5th Fridays - the "weekend" belongs to dad,
         # and the Thu overnight extends to cover Fri-Sat-Sun as one block.
+        # BUT: if today is a qualifying Fri, Sat, or Sun, and the underlying
+        # custodian/reason (without extended weekend) is a break day (e.g.
+        # "thanksgiving", "christmas_first_half"), skip this step — the break
+        # custodian rules take precedence.
         if d.weekday() == 4:  # Friday
             fridays = sorted(self._all_fridays(d.year, d.month))
             if d in fridays:
                 fri_rank = fridays.index(d) + 1
                 if fri_rank in [1, 3, 5]:
-                    # This is a dad weekend — Thu overnight extends to cover it
-                    return "dad", "weekend"
+                    underlying_cust, underlying_reason = self._no_extended_weekend(d)
+                    if underlying_reason not in ("weekend", "thursday"):
+                        pass  # d is a break day (e.g. "thanksgiving") — skip dad weekend
+                    else:
+                        return "dad", "weekend"
 
         if d.weekday() in (5, 6):  # Saturday or Sunday
             fri = d - timedelta(days=d.weekday() - 4)  # preceding Friday
@@ -278,7 +358,11 @@ class CustodyCalculator:
             if fri in fridays:
                 fri_rank = fridays.index(fri) + 1
                 if fri_rank in [1, 3, 5]:
-                    return "dad", "weekend"
+                    fri_underlying_cust, fri_underlying_reason = self._no_extended_weekend(fri)
+                    if fri_underlying_reason not in ("weekend", "thursday"):
+                        pass  # Fri was a break day — skip dad weekend extension
+                    else:
+                        return "dad", "weekend"
 
         # 4b. Non-qualifying Friday no-school day (per §153.312)
         # If Thu was a school day (Dad's) and Fri is a no-school day,
@@ -290,7 +374,13 @@ class CustodyCalculator:
             thu_was_school = thu.weekday() == 3 and not self._is_noschool_day(thu)
             if fri_is_ns and thu_was_school:
                 # Dad had Thu school day; Fri no-school — possession rolls forward
-                return "dad", "no_school_day"
+                # BUT: if Thu was itself the last school day before a break (Step 2),
+                # Thu already belongs to the break period; don't double-extend into Fri.
+                thu_is_last_school_day = self._is_last_school_day_before_any_break(thu)
+                if thu_is_last_school_day:
+                    pass  # skip — Thu already assigned to break, not Dad's Thu possession
+                else:
+                    return "dad", "no_school_day"
 
         # 4c. Weekend extension for Dad's no-school Friday
         # After a qualifying Fri no-school (step 4) OR non-qualifying Fri no-school (step 4b),
@@ -299,7 +389,17 @@ class CustodyCalculator:
             fri = d - timedelta(days=d.weekday() - 4)  # preceding Friday
             if self._is_noschool_day(fri):
                 # Preceding Fri was a no-school day — Dad's possession extended
-                return "dad", "no_school_day"
+                # BUT: only if Fri was a normal school day with Dad's standard weekend/Thu,
+                # NOT if Fri was already the last school day before a break (Step 2).
+                # When Fri is the last school day before a break, Step 2 already assigns
+                # it to the break period — Dad's weekend should not叠加 on top.
+                # Skip only if Fri was the last school day before a break (Step 2 case).
+                # In that case, the break custodian rules already cover the weekend.
+                # Standalone no-school days (like a one-off student holiday) still extend.
+                if self._is_last_school_day_before_any_break(fri):
+                    pass  # Fri is a break day 1 — don't double-extend
+                else:
+                    return "dad", "no_school_day"
 
         # 4d. Monday no-school extends Dad's weekend
         # Per §153.312: if weekend coincides with a holiday (no-school Mon),
@@ -350,6 +450,13 @@ class CustodyCalculator:
             fri_before_md = md - timedelta(days=2)
             if fri_before_md <= d <= md:
                 return rules["mothers_day"]["parent"], "mothers_day"
+        # Step 2 (no_extended version): last school day before a break = that break day 1
+        for sy in self.school_years:
+            for br_name, br in sy.get("breaks", {}).items():
+                last_sd = self._last_school_day_before_break(br_name, sy)
+                if last_sd and d == last_sd:
+                    br_data = {"start": br["start"], "end": br["end"], "label": br.get("label", {})}
+                    return self._break_custodian(br_name, br_data, d, is_odd_year)
         break_name, break_data = self._in_which_break(d)
         if break_name:
             return self._break_custodian(break_name, break_data, d, is_odd_year)
@@ -363,54 +470,29 @@ class CustodyCalculator:
                     return rules["weekend"]["parent"], "weekend"
         return rules["parents"]["managing"], "default_custody"
 
-        """
-        Internal custodian check that does NOT apply the extended weekend rule.
-        Used only by the extended weekend check to avoid infinite recursion.
-        """
-        rules = self.rules
-        is_odd_year = d.year % 2 == 1
-        fd = self._fathers_day(d.year)
-        if fd:
-            fri_before_fd = fd - timedelta(days=2)
-            if fri_before_fd <= d <= fd:
-                return rules["fathers_day"]["parent"], "fathers_day"
-        md = self._mothers_day(d.year)
-        if md:
-            fri_before_md = md - timedelta(days=2)
-            if fri_before_md <= d <= md:
-                return rules["mothers_day"]["parent"], "mothers_day"
-        break_name, break_data = self._in_which_break(d)
-        if break_name:
-            return self._break_custodian(break_name, break_data, d, is_odd_year)
-        if d.weekday() == 3:
-            return rules["thursday"]["parent"], "thursday"
-        if d.weekday() == 4:
-            fridays = sorted(self._all_fridays(d.year, d.month))
-            if d in fridays:
-                fri_rank = fridays.index(d) + 1
-                if fri_rank in [1, 3, 5]:
-                    return rules["weekend"]["parent"], "weekend"
-        return rules["parents"]["managing"], "default_custody"
-
-    def _last_school_day_before_break(self, break_name: str):
+    def _last_school_day_before_break(self, break_name: str, sy=None):
         """
         Return the last actual school day BEFORE a break starts.
         This day belongs to the break, not to regular custody.
         e.g. Dec 18 (last day before Christmas) = Christmas day 1
              May 21 (last day before summer) = summer day 1
+
+        If sy is provided, only search within that school year.
+        Otherwise search all school years (returns the last match found).
         """
-        for sy in self.school_years:
-            br = sy.get("breaks", {}).get(break_name)
+        school_years_to_search = [sy] if sy else self.school_years
+        for sy_iter in school_years_to_search:
+            br = sy_iter.get("breaks", {}).get(break_name)
             if not br:
                 continue
             br_start = date.fromisoformat(br["start"])
-            noschool = {date.fromisoformat(n["date"]) for n in sy.get("noschool_days", [])}
+            noschool = {date.fromisoformat(n["date"]) for n in sy_iter.get("noschool_days", [])}
             prev = br_start - timedelta(days=1)
             for _ in range(90):
                 if prev.weekday() < 5 and prev not in noschool:
                     in_other = any(
                         s <= prev <= e
-                        for name, b in sy.get("breaks", {}).items()
+                        for name, b in sy_iter.get("breaks", {}).items()
                         if name != break_name
                         for s, e in [(date.fromisoformat(b["start"]), date.fromisoformat(b["end"]))]
                     )
@@ -421,13 +503,100 @@ class CustodyCalculator:
         return None
 
 
+    def _is_last_school_day_before_any_break(self, d: date) -> bool:
+        """
+        Return True if d is the last school day before ANY school break.
+        Used to prevent double-extension when a day is already claimed by Step 2.
+        """
+        for sy in self.school_years:
+            for br_name in sy.get("breaks", {}).keys():
+                last_sd = self._last_school_day_before_break(br_name, sy)
+                if last_sd and d == last_sd:
+                    return True
+        return False
+
+    # ─── Thanksgiving helper ─────────────────────────────────────────────────
+    # Per §153.314(3): Period begins at the time school is dismissed on the day
+    # BEFORE Thanksgiving, and ends 6pm on the Sunday after Thanksgiving.
+
+    def _thanksgiving_period(self, d: date) -> tuple:
+        """
+        Return (start_date, end_date) of the Thanksgiving period for date d,
+        or (None, None) if d is not in any Thanksgiving period.
+        Per §153.314(3): start = last school day before the Thanksgiving break,
+        end = the day before school resumes after Thanksgiving (Sunday after).
+        """
+        for sy in self.school_years:
+            sy_start = date.fromisoformat(sy["start"])
+            sy_end = date.fromisoformat(sy["end"])
+
+            # Find the Thanksgiving "break" period in this school year.
+            # The breaks dict has a 'thanksgiving' key with start/end dates.
+            tg_break = sy.get("breaks", {}).get("thanksgiving")
+            if not tg_break:
+                continue
+            tg_break_start = date.fromisoformat(tg_break["start"])
+            tg_break_end = date.fromisoformat(tg_break["end"])
+
+            # Walk backward from tg_break_start-1 to find the last school day
+            # BEFORE the break (this is "the day school is dismissed before Thanksgiving").
+            prev = tg_break_start - timedelta(days=1)
+            noschool = {date.fromisoformat(n["date"]) for n in sy.get("noschool_days", [])}
+            for _ in range(90):
+                if prev.weekday() < 5 and prev not in noschool:
+                    in_other = any(
+                        date.fromisoformat(b2["start"]) <= prev <= date.fromisoformat(b2["end"])
+                        for n2, b2 in sy.get("breaks", {}).items()
+                    )
+                    if not in_other:
+                        break
+                prev -= timedelta(days=1)
+            else:
+                prev = tg_break_start - timedelta(days=1)
+
+            tg_period_start = prev  # last school day before Thanksgiving break
+
+            # tg_period_end: Sunday after Thanksgiving.
+            # Use the actual Thanksgiving noschool_day (the Thursday) if found;
+            # otherwise derive from tg_break_start (Friday before the break week).
+            # For 2026-2027: tg_break_start=Nov21 (Fri), so Thanksgiving=Nov21+5=Nov26 (Thu).
+            # Sunday after Nov26 = Nov29. Sunday after Nov21 = Nov22.
+            # Use the Thanksgiving day itself (Nov26) not the break start (Nov21).
+            thanksgiving_day = None
+            for nsd in sy.get("noschool_days", []):
+                nsd_date = date.fromisoformat(nsd["date"])
+                label_text = nsd.get("label", {})
+                if isinstance(label_text, dict):
+                    label_text = label_text.get("en", "")
+                if "thanksgiving" in label_text.lower() and nsd_date.weekday() == 3:
+                    thanksgiving_day = nsd_date
+                    break
+            # Fallback: Thanksgiving is 5 days after tg_break_start (Fri -> Thu)
+            if thanksgiving_day is None:
+                thanksgiving_day = tg_break_start + timedelta(days=5)
+
+            # Sunday after Thanksgiving: next Sunday = today + ((6-weekday) % 7), +7 if today is Sunday
+            days_until_sunday = (6 - thanksgiving_day.weekday()) % 7
+            if days_until_sunday == 0:
+                days_until_sunday = 7
+            tg_period_end = thanksgiving_day + timedelta(days=days_until_sunday)
+            # Extend to cover no-school days between Sunday and school resuming.
+            tg_period_end = max(tg_period_end, tg_break_end)
+
+            # Check if d is in the statute Thanksgiving period
+            if tg_period_start <= d <= tg_period_end:
+                return tg_period_start, tg_period_end
+
+        return None, None
+
     # ─── Compute all intervals ───────────────────────────────────────────────
 
     def compute_intervals(self) -> list:
         """
         Compute custody intervals for ALL calendar days from earliest school year
-        start through latest school year end. This ensures summer breaks between
-        and across school years are fully covered.
+        start through latest school year end, PLUS the summer break that follows
+        the last school year (covers July-August after the final SY ends).
+        This ensures summer breaks between and across school years are fully covered.
         """
         all_starts = sorted({date.fromisoformat(sy["start"]) for sy in self.school_years})
         all_ends = sorted({date.fromisoformat(sy["end"]) for sy in self.school_years})
@@ -438,7 +607,20 @@ class CustodyCalculator:
         # Start from May 22 two years before to capture pre-instruction gap days
         first_sy_start = all_starts[0]
         d = date(first_sy_start.year - 2, 5, 22)
-        end_d = all_ends[-1]
+        # End: latest of (last school year end, last break end date)
+        # This ensures we cover the summer after the final school year
+        all_break_ends = sorted({
+            date.fromisoformat(br["end"])
+            for sy in self.school_years
+            for br in sy.get("breaks", {}).values()
+        })
+        all_nsd_ends = sorted({
+            date.fromisoformat(nsd["date"])
+            for sy in self.school_years
+            for nsd in sy.get("noschool_days", [])
+        })
+        end_candidates = [all_ends[-1]] + (list(all_break_ends) if all_break_ends else []) + (list(all_nsd_ends) if all_nsd_ends else [])
+        end_d = max(end_candidates)
 
         while d <= end_d:
             custodian, reason = self._get_custodian(d)
@@ -475,27 +657,4 @@ if __name__ == "__main__":
     cal = load_standard_calendar(sys.argv[2])
     calc = CustodyCalculator(rules, cal)
     intervals = calc.compute_intervals()
-    checks = [
-        ("2025-08-13", "pre-school summer", "mom", "regular_school_day"),
-        ("2025-09-05", "1st Friday Sep", "dad", "weekend"),
-        ("2025-09-06", "Saturday", "mom", "regular_school_day"),
-        ("2025-11-24", "thanksgiving odd Dad", "dad", "thanksgiving"),
-        ("2025-11-28", "thanksgiving odd Dad", "dad", "thanksgiving"),
-        ("2025-12-19", "christmas first odd", "dad", "christmas_first_half"),
-        ("2025-12-29", "christmas second odd", "mom", "christmas_second_half"),
-        ("2026-03-16", "spring break even", "dad", "spring_break"),
-        ("2026-07-15", "summer Dad days", "dad", "summer_possessory"),
-        ("2026-08-12", "summer remainder", "mom", "summer_remainder"),
-        ("2026-06-19", "fathers day weekend", "dad", "regular_school_day"),
-        ("2026-06-20", "fathers day weekend", "dad", "regular_school_day"),
-        ("2026-06-21", "fathers day", "dad", "regular_school_day"),
-        ("2026-05-10", "mothers day", "mom", "regular_school_day"),
-    ]
     print(f"Total intervals: {len(intervals)}")
-    for ds, desc, exp_c, exp_r in checks:
-        d = date.fromisoformat(ds)
-        for iv in intervals:
-            if iv.start <= d <= iv.end:
-                ok = "OK" if iv.custodian == exp_c and iv.reason == exp_r else "FAIL"
-                print(f"  {ds} {desc[:20]:20s}: {iv.custodian} ({iv.reason}) [{ok}]")
-                break

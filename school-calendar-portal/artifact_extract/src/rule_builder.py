@@ -139,10 +139,12 @@ def build_custody_rules(
     rules["holidays"]["christmas"] = {
         "split": True,
         "split_detail": xm["split_point"]["detail"],
-        "odd_year_first": possessory_label,
-        "odd_year_second": managing_label,
-        "even_year_first": managing_label,
-        "even_year_second": possessory_label,
+        # Per §153.314(1)-(2): Even year = possessory(Dad) first half, Managing(Mom) second half
+        # Odd year = Managing(Mom) first half, Possessory(Dad) second half
+        "odd_year_first": managing_label,
+        "odd_year_second": possessory_label,
+        "even_year_first": possessory_label,
+        "even_year_second": managing_label,
     }
 
     # Spring break
