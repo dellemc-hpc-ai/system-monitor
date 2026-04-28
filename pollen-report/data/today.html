@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 Austin Pollen Report</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d1117; color: #e6edf3; line-height: 1.6; }
+        .container { max-width: 640px; margin: 0 auto; padding: 30px 16px; }
+        h1 { font-size: 1.6rem; color: #58a6ff; margin-bottom: 4px; }
+        .timestamp { color: #8b949e; font-size: 0.85rem; }
+        .location { color: #8b949e; font-size: 0.9rem; margin: 8px 0 24px; }
+        .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+        .card h2 { font-size: 0.85rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; border-bottom: 1px solid #21262d; padding-bottom: 8px; }
+        .source-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 12px; }
+        .source-header { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid #21262d; padding-bottom: 10px; }
+        .source-tag { font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: 700; }
+        .source-tag.gps { background: #1f6feb; } .source-tag.zip { background: #238636; }
+        .source-name { font-weight: 700; font-size: 0.95rem; }
+        .source-loc { color: #8b949e; font-size: 0.8rem; margin-left: auto; }
+        .pollen-row { display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #21262d; }
+        .pollen-row:last-child { border-bottom: none; }
+        .pollen-name { font-size: 0.95rem; }
+        .pollen-right { display: flex; align-items: center; gap: 8px; }
+        .pollen-num { font-size: 1.2rem; font-weight: 700; min-width: 36px; text-align: right; }
+        .pollen-unavailable { padding: 12px 0; color: #8b949e; font-size: 0.88rem; }
+        .species-genus { color: #8b949e; font-size: 0.8rem; font-weight: 400; }
+        .zip-overall { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #21262d; }
+        .zip-idx { font-size: 1.5rem; font-weight: 800; }
+        .zip-lbl { color: #8b949e; font-size: 0.85rem; }
+        .zip-note { color: #484f58; font-size: 0.75rem; margin-top: 8px; }
+        .badge { font-size: 0.68rem; padding: 2px 7px; border-radius: 10px; color: #fff; font-weight: 600; }
+        .lightgreen { background: #3fb950; } .green { background: #238636; }
+        .yellow { background: #d29922; } .orange { background: #db6d28; }
+        .red { background: #da3633; } .purple { background: #8957e5; }
+        .maroon { background: #b62324; } .gray { background: #484f58; }
+        .aqi-section { display: flex; align-items: center; gap: 16px; }
+        .aqi-num { font-size: 2.5rem; font-weight: 800; }
+        .weather-row { display: flex; align-items: baseline; gap: 12px; }
+        .temp-big { font-size: 2rem; font-weight: 800; }
+        .temp-range { color: #8b949e; }
+        .sun-info { color: #8b949e; font-size: 0.85rem; }
+        .headline { margin-top: 10px; color: #d29922; font-size: 0.9rem; }
+        .forecast-row { display: grid; grid-template-columns: 60px 1fr 50px 50px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #21262d; font-size: 0.9rem; }
+        .forecast-row:last-child { border-bottom: none; }
+        .forecast-date { color: #8b949e; }
+        .forecast-temps { color: #8b949e; }
+        .footer { text-align: center; color: #484f58; font-size: 0.8rem; margin-top: 24px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌿 Austin Pollen Report</h1>
+        <p class="timestamp">2026-04-28 08:14 </p>
+        <p class="location">📍 10625 Glass Mountain Trl, Austin TX 78750</p>
+
+        <div class="card">
+            <h2>🌡️ Key Allergens Today</h2>
+            <p style="color:#8b949e;font-size:0.82rem;margin-bottom:12px">Primary outdoor allergens - sorted by severity &nbsp;⭐ = top contributor</p>
+            <div class="pollen-rows">
+            <div class="pollen-row">
+                <span class="pollen-name">Tree</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">750</span>
+                    <span class="badge orange">High</span>
+                </div>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">Mold</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">3250</span>
+                    <span class="badge green">Low</span>
+                </div>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">Ragweed</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">5</span>
+                    <span class="badge green">Low</span>
+                </div>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">Grass</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">0</span>
+                    <span class="badge green">Low</span>
+                </div>
+            </div>
+            </div>
+        </div>
+
+
+        <div class="source-card">
+            <div class="source-header">
+                <span class="source-tag gps">GPS</span>
+                <span class="source-name">AccuWeather (pollencount.app)</span>
+                <span class="source-loc">10625 Glass Mountain Trl, Austin TX 78750</span>
+            </div>
+            <div class="pollen-rows">
+            <div class="pollen-row">
+                <span class="pollen-name">🌳 Tree</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">750</span>
+                    <span class="badge orange">High</span>
+                </div>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">🌾 Grass</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">0</span>
+                    <span class="badge green">Low</span>
+                </div>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">🌼 Ragweed</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">5</span>
+                    <span class="badge green">Low</span>
+                </div>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">🍄 Mold ⭐</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">3250</span>
+                    <span class="badge green">Low</span>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <div class="source-card">
+            <div class="source-header">
+                <span class="source-tag zip">ZIP</span>
+                <span class="source-name">pollen.com (78750)</span>
+                <span class="source-loc">Austin TX 78750</span>
+            </div>
+            <div class="pollen-rows">
+            <div class="pollen-row">
+                <span class="pollen-name">🌿 Hickory <span class="species-genus">(Carya)</span></span>
+                <span class="badge" style="background:#1f6feb">Tree</span>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">🌿 Willow <span class="species-genus">(Salix)</span></span>
+                <span class="badge" style="background:#1f6feb">Tree</span>
+            </div>
+            <div class="pollen-row">
+                <span class="pollen-name">🌿 Oak <span class="species-genus">(Quercus)</span></span>
+                <span class="badge" style="background:#1f6feb">Tree</span>
+            </div>
+            </div>
+            <div class="zip-overall">
+                <span class="zip-idx">7.1</span>
+                <span class="zip-lbl">medium</span>
+            </div>
+            <div class="zip-note">Species breakdown via pollen.com &middot; Today's top allergens</div>
+        </div>
+
+        <div class="card">
+            <h2>🌬️ Air Quality</h2>
+            <div class="aqi-section">
+                <span class="aqi-num">68</span>
+                <span class="badge yellow">Moderate</span>
+                <span style="color:#8b949e">PM2.5: 68</span>
+            </div>
+        </div>
+
+
+        <div class="card">
+            <h2>Today's Weather</h2>
+            <div class="weather-row">
+                <span class="temp-big">93°F</span>
+                <span class="temp-range">/ 73°F</span>
+                <span class="sun-info">☀️ 4.5h sun</span>
+            </div>
+            
+        </div>
+
+        <div class="card">
+            <h2>📅 5-Day Forecast</h2>
+            <div class="forecast-row header">
+                <span></span><span></span><span>🌳</span><span>🌾</span>
+            </div>
+        <div class="forecast-row">
+            <span class="forecast-date">04-28</span>
+            <span class="forecast-temps">73°–93°F</span>
+            <span>🌳 750</span>
+            <span>🌾 0</span>
+        </div>
+        <div class="forecast-row">
+            <span class="forecast-date">04-29</span>
+            <span class="forecast-temps">65°–79°F</span>
+            <span>🌳 413</span>
+            <span>🌾 0</span>
+        </div>
+        <div class="forecast-row">
+            <span class="forecast-date">04-30</span>
+            <span class="forecast-temps">59°–71°F</span>
+            <span>🌳 0</span>
+            <span>🌾 0</span>
+        </div>
+        <div class="forecast-row">
+            <span class="forecast-date">05-01</span>
+            <span class="forecast-temps">51°–67°F</span>
+            <span>🌳 0</span>
+            <span>🌾 0</span>
+        </div>
+        <div class="forecast-row">
+            <span class="forecast-date">05-02</span>
+            <span class="forecast-temps">49°–70°F</span>
+            <span>🌳 169</span>
+            <span>🌾 56</span>
+        </div>
+        </div>
+
+        <p class="footer">Sources: AccuWeather (GPS) + pollen.com (ZIP) for Austin TX 78750</p>
+    </div>
+</body>
+</html>

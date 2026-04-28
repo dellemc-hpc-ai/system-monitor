@@ -1,0 +1,111 @@
+{
+  "timestamp": "2026-04-28T08:14:28.732782",
+  "location": "10625 Glass Mountain Trl, Austin TX 78750",
+  "gps": {
+    "source": "GPS (AccuWeather)",
+    "source_name": "pollencount.app (10625 Glass Mountain)",
+    "air_quality": 92,
+    "grass": 0,
+    "grass_category": "Low",
+    "mold": 3250,
+    "mold_category": "Low",
+    "ragweed": 5,
+    "ragweed_category": "Low",
+    "tree": 750,
+    "tree_category": "High",
+    "uv_index": 10,
+    "temp_high": 93,
+    "temp_low": 73,
+    "hours_of_sun": 4.5,
+    "forecast": [
+      {
+        "date": "2026-04-28",
+        "temp_high": 93,
+        "temp_low": 73,
+        "tree": 750,
+        "grass": 0
+      },
+      {
+        "date": "2026-04-29",
+        "temp_high": 79,
+        "temp_low": 65,
+        "tree": 413,
+        "grass": 0
+      },
+      {
+        "date": "2026-04-30",
+        "temp_high": 71,
+        "temp_low": 59,
+        "tree": 0,
+        "grass": 0
+      },
+      {
+        "date": "2026-05-01",
+        "temp_high": 67,
+        "temp_low": 51,
+        "tree": 0,
+        "grass": 0
+      },
+      {
+        "date": "2026-05-02",
+        "temp_high": 70,
+        "temp_low": 49,
+        "tree": 169,
+        "grass": 56
+      }
+    ]
+  },
+  "zip": {
+    "source": "ZIP (pollen.com)",
+    "source_name": "pollen.com (Austin 78750)",
+    "overall_index": 7.1,
+    "overall_label": "medium",
+    "top_allergens": [
+      {
+        "name": "Hickory",
+        "genus": "Carya",
+        "plantType": "Tree"
+      },
+      {
+        "name": "Willow",
+        "genus": "Salix",
+        "plantType": "Tree"
+      },
+      {
+        "name": "Oak",
+        "genus": "Quercus",
+        "plantType": "Tree"
+      }
+    ],
+    "yesterday": {
+      "index": 8.6,
+      "label": "medium-high",
+      "names": [
+        "Hickory",
+        "Willow",
+        "Oak"
+      ]
+    },
+    "tomorrow": {
+      "index": 6,
+      "label": "medium",
+      "names": [
+        "Hickory",
+        "Willow",
+        "Oak"
+      ]
+    },
+    "tree": null,
+    "grass": null,
+    "ragweed": null,
+    "mold": null
+  },
+  "aqi": {
+    "pm25": 68,
+    "aqi": 68,
+    "source": "WAQI (World Air Quality Index)"
+  },
+  "top_allergen": "Tree",
+  "top_allergen_value": 750,
+  "top_allergen_category": "High"
+}

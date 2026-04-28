@@ -3,17 +3,19 @@
 Pollen Report Scraper - Linux Version
 Austin, TX 78750 | lat=30.4403525, lng=-97.81407276
 
-Data source: pollencount.app / AccuWeather API
-Endpoint: https://pollencount.app/api/getForecast
+Data sources:
+  1. GPS (pollencount.app / AccuWeather): lat/lng based
+  2. ZIP  (pollen.com via CDP): species-level data for Austin 78750
 
 Usage:
   python3 scrape.py [--output FILE] [--html FILE]
-  python3 scrape.py --test    # dry run, print HTML to stdout
+  python3 scrape.py --test
 """
 
 import argparse
 import json
 import os
+import subprocess
 import sys
 import urllib.request
 from datetime import datetime
@@ -25,126 +27,219 @@ ZIP_CODE = "78750"
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 OUTPUT_JSON = os.path.join(DATA_DIR, "pollen-data.json")
 DEFAULT_HTML = os.path.join(DATA_DIR, "today.html")
+ZIP_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pollen_com_cdp.py")
 
-POLLEN_API = f"https://pollencount.app/api/getForecast?lat={GPS_LAT}&lng={GPS_LNG}"
+POLLEN_API_GPS = f"https://pollencount.app/api/getForecast?lat={GPS_LAT}&lng={GPS_LNG}"
 AQI_API = "https://api.waqi.info/feed/geo:30.4403;-97.814/?token=demo"
 
-# --- Data Fetching ---
 
-def fetch_pollen_data():
-    """Fetch pollen/weather data from pollencount.app AccuWeather API."""
-    print(f"Fetching from pollencount.app API...")
+# ─── GPS source: AccuWeather via pollencount.app ──────────────────────────────────
+
+def fetch_gps_data():
+    """Fetch pollen/weather data from AccuWeather (GPS-based)."""
+    print("Fetching GPS data from pollencount.app...")
     req = urllib.request.Request(
-        POLLEN_API,
+        POLLEN_API_GPS,
         headers={"User-Agent": "Mozilla/5.0 (compatible; PollenReport/1.0)"}
     )
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
-            return parse_forecast(data)
+            return json.loads(resp.read().decode())
     except Exception as e:
-        print(f"API fetch failed: {e}", file=sys.stderr)
+        print(f"GPS fetch failed: {e}", file=sys.stderr)
         return None
 
 
-def parse_forecast(raw):
-    """Parse AccuWeather getForecast response into our data format."""
-    result = {}
-
-    # Pollen/air data is in DailyForecasts[0].AirAndPollen
+def parse_gps_data(raw):
+    """Parse AccuWeather getForecast response into structured dict."""
+    result = {
+        "source": "GPS (AccuWeather)",
+        "source_name": "pollencount.app (10625 Glass Mountain)",
+    }
     forecasts = raw.get("DailyForecasts", [])
     if not forecasts:
         return result
-
     today = forecasts[0]
-    air_pollen = today.get("AirAndPollen", [])
-
-    for item in air_pollen:
+    for item in today.get("AirAndPollen", []):
         name = item.get("Name", "")
-        value = item.get("Value")
-        category = item.get("Category", "Unknown")
-
-        if name == "AirQuality":
-            result["aqi"] = value
-            result["aqi_category"] = category
-        elif name == "Tree":
-            result["tree"] = value
-            result["tree_category"] = category
+        val = item.get("Value")
+        cat = item.get("Category", "")
+        if name == "Tree":
+            result["tree"] = val
+            result["tree_category"] = cat
         elif name == "Grass":
-            result["grass"] = value
-            result["grass_category"] = category
+            result["grass"] = val
+            result["grass_category"] = cat
         elif name == "Ragweed":
-            result["ragweed"] = value
-            result["ragweed_category"] = category
+            result["ragweed"] = val
+            result["ragweed_category"] = cat
         elif name == "Mold":
-            result["mold"] = value
-            result["mold_category"] = category
+            result["mold"] = val
+            result["mold_category"] = cat
+        elif name == "AirQuality":
+            result["air_quality"] = val
         elif name == "UVIndex":
-            result["uv"] = value
-            result["uv_category"] = category
-
-    # Weather
-    temp = today.get("Temperature", {})
-    result["temp_high"] = temp.get("Maximum", {}).get("Value")
-    result["temp_low"] = temp.get("Minimum", {}).get("Value")
-    result["hours_of_sun"] = today.get("HoursOfSun")
-    result["headline"] = raw.get("Headline", {}).get("Text")
-
-    # Forecast summary
-    result["forecast"] = []
-    for day in forecasts[:5]:
-        date_str = day.get("Date", "")[:10]
-        air = {i["Name"].lower(): i["Value"] for i in day.get("AirAndPollen", [])}
-        result["forecast"].append({
-            "date": date_str,
-            "tree": air.get("tree"),
-            "grass": air.get("grass"),
+            result["uv_index"] = val
+    if "Headline" in today:
+        result["headline"] = today["Headline"]
+    result["temp_high"] = today.get("Temperature", {}).get("Maximum", {}).get("Value")
+    result["temp_low"] = today.get("Temperature", {}).get("Minimum", {}).get("Value")
+    result["hours_of_sun"] = today.get("HoursOfSun", "?")
+    fc = []
+    for day in forecasts[:6]:
+        fc.append({
+            "date": day.get("Date", "")[:10],
             "temp_high": day.get("Temperature", {}).get("Maximum", {}).get("Value"),
             "temp_low": day.get("Temperature", {}).get("Minimum", {}).get("Value"),
+            "tree": next((i.get("Value") for i in day.get("AirAndPollen", []) if i.get("Name") == "Tree"), None),
+            "grass": next((i.get("Value") for i in day.get("AirAndPollen", []) if i.get("Name") == "Grass"), None),
         })
-
+    result["forecast"] = fc
     return result
 
 
-def fetch_aqi():
-    """Fetch AQI from WAQI (World Air Quality Index project)."""
+# ─── ZIP source: pollen.com via Chrome CDP ────────────────────────────────────────
+
+def fetch_zip_data():
+    """Fetch species-level pollen data from pollen.com via Chrome CDP.
+    Falls back to None if CDP fails.
+    """
+    print("Fetching ZIP data from pollen.com via CDP...")
+    if not os.path.exists(ZIP_SCRIPT):
+        print(f"  CDP script not found: {ZIP_SCRIPT}")
+        return None
     try:
-        req = urllib.request.Request(
-            AQI_API,
-            headers={"User-Agent": "Mozilla/5.0"}
+        result = subprocess.run(
+            [sys.executable, ZIP_SCRIPT],
+            capture_output=True, text=True, timeout=90
         )
+        if result.returncode == 0 and result.stdout.strip() and result.stdout.strip() != "null":
+            data = json.loads(result.stdout.strip())
+            print("  -> pollen.com CDP: success")
+            return data
+        else:
+            print("  -> pollen.com CDP returned null or failed")
+            return None
+    except subprocess.TimeoutExpired:
+        print("  -> CDP timed out (90s)")
+        return None
+    except Exception as e:
+        print(f"  -> CDP failed: {e}")
+        return None
+
+
+def parse_zip_data(raw):
+    """Parse pollen.com data into unified structure.
+    Handles CDP format: {overall_index, overall_label, top_allergens:[{name,genus,plantType}], ...}
+    Also handles old API format: {forecast: {today: {...}}}
+    """
+    if raw is None:
+        return {}
+    result = {
+        "source": "ZIP (pollen.com)",
+        "source_name": "pollen.com (Austin 78750)",
+    }
+
+    # CDP format - species-level
+    if "overall_index" in raw or "top_allergens" in raw:
+        result["overall_index"] = raw.get("overall_index")
+        result["overall_label"] = raw.get("overall_label", "")
+        result["top_allergens"] = raw.get("top_allergens", [])
+        result["yesterday"] = raw.get("yesterday", {})
+        result["tomorrow"] = raw.get("tomorrow", {})
+        result["tree"] = None
+        result["grass"] = None
+        result["ragweed"] = None
+        result["mold"] = None
+        return result
+
+    # Old API format
+    try:
+        fc = raw.get("forecast", {})
+        today = fc.get("today", fc.get("current", fc))
+        if isinstance(today, list):
+            today = today[0] if today else {}
+        result["tree"] = today.get("Tree", today.get("tree", today.get("TreePollen")))
+        result["grass"] = today.get("Grass", today.get("grass", today.get("GrassPollen")))
+        result["ragweed"] = today.get("Ragweed", today.get("ragweed"))
+        result["mold"] = today.get("Mold", today.get("mold"))
+        for k in ["tree_category", "grass_category", "ragweed_category", "mold_category"]:
+            v = today.get(k.title().replace("_", ""), today.get(k))
+            if v is not None:
+                result[k] = v
+        result["forecast"] = []
+        for day in fc.get("extended", [])[:5]:
+            result["forecast"].append({
+                "date": day.get("date", day.get("Date", ""))[:10],
+                "tree": day.get("Tree", day.get("tree")),
+                "grass": day.get("Grass", day.get("grass")),
+            })
+    except Exception as e:
+        print(f"ZIP parse error: {e}", file=sys.stderr)
+    return result
+
+
+# ─── AQI from WAQI ───────────────────────────────────────────────────────────────
+
+def fetch_aqi():
+    try:
+        req = urllib.request.Request(AQI_API, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
             if data.get("status") == "ok":
                 iaqi = data["data"].get("iaqi", {})
-                pm25 = iaqi.get("pm25", {}).get("v")
-                aqi_val = data["data"].get("aqi")
                 return {
-                    "pm25": pm25,
-                    "aqi": aqi_val,
-                    "source": "WAQI / China Embassy"
+                    "pm25": iaqi.get("pm25", {}).get("v"),
+                    "aqi": data["data"].get("aqi"),
+                    "source": "WAQI (World Air Quality Index)",
                 }
     except Exception as e:
         print(f"AQI fetch failed: {e}", file=sys.stderr)
     return {"pm25": None, "aqi": None, "source": "unavailable"}
 
 
-# --- Report Generation ---
+# ─── Report Generation ────────────────────────────────────────────────────────────
 
-def severity_pollen(value, category, max_val=None):
-    """Return (label, color_class, level_badge)."""
+CAT_ORDER = {"very high": 0, "high": 1, "moderate": 2, "low": 3, "very low": 4, "": 5}
+
+def severity_pollen(value, category):
+    """Return (label, color) for a pollen value and category."""
     if value is None:
-        return "—", "gray", None
-    cat = category.lower() if category else ""
-    color_map = {"low": "green", "moderate": "yellow", "high": "orange", "very high": "red"}
-    color = color_map.get(cat, "gray")
-    return category, color, value
+        return "-", "gray"
+    cat = (category or "").lower()
+    color_map = {
+        "very low": "lightgreen",
+        "low": "green",
+        "moderate": "yellow",
+        "high": "orange",
+        "very high": "red",
+    }
+    return category or "-", color_map.get(cat, "gray")
+
+
+def top_allergens(gps):
+    """Return sorted allergens (name, value, category, color).
+    Sorted by API severity category, then by raw value as tiebreaker.
+    """
+    allergens = []
+    for key, label in [
+        ("tree", "Tree"),
+        ("grass", "Grass"),
+        ("ragweed", "Ragweed"),
+        ("mold", "Mold"),
+    ]:
+        val = gps.get(key)
+        cat = gps.get(f"{key}_category", "")
+        if val is not None:
+            _, col = severity_pollen(val, cat)
+            allergens.append((label, val, cat, col))
+    allergens.sort(key=lambda x: (CAT_ORDER.get(x[2].lower(), 99), -(x[1] or 0)))
+    return allergens
 
 
 def severity_aqi(aqi):
-    """Return (label, color_class) for AQI."""
     if aqi is None:
-        return "—", "gray"
+        return "-", "gray"
     if aqi <= 50:
         return "Good", "green"
     elif aqi <= 100:
@@ -155,53 +250,156 @@ def severity_aqi(aqi):
         return "Unhealthy", "red"
     elif aqi <= 300:
         return "Very Unhealthy", "purple"
-    else:
-        return "Hazardous", "maroon"
+    return "Hazardous", "maroon"
 
 
-def generate_html(data, aqi):
-    """Generate the HTML pollen report."""
+def source_block(data, is_gps=True):
+    """Build a source card with per-type pollen rows.
+    Marks the top contributor (highest raw value) with a star.
+    """
+    tag = "GPS" if is_gps else "ZIP"
+    tag_class = "gps" if is_gps else "zip"
+    loc = "10625 Glass Mountain Trl, Austin TX 78750" if is_gps else "Austin TX 78750 (ZIP)"
+    src = "AccuWeather (pollencount.app)" if is_gps else "pollen.com"
+
+    allergen_vals = {k: data.get(k, 0) or 0 for k in ["tree", "grass", "ragweed", "mold"]}
+    top_key = max(allergen_vals, key=allergen_vals.get) if any(allergen_vals.values()) else None
+
+    rows_html = ""
+    for key, icon in [("tree", "🌳"), ("grass", "🌾"), ("ragweed", "🌼"), ("mold", "🍄")]:
+        val = data.get(key)
+        cat = data.get(f"{key}_category", "")
+        cat_disp, col = severity_pollen(val, cat)
+        v = val if val is not None else "-"
+        star = " ⭐" if key == top_key and val is not None else ""
+        rows_html += f"""
+            <div class="pollen-row">
+                <span class="pollen-name">{icon} {key.title()}{star}</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">{v}</span>
+                    <span class="badge {col}">{cat_disp}</span>
+                </div>
+            </div>"""
+
+    return f"""
+        <div class="source-card">
+            <div class="source-header">
+                <span class="source-tag {tag_class}">{tag}</span>
+                <span class="source-name">{src}</span>
+                <span class="source-loc">{loc}</span>
+            </div>
+            <div class="pollen-rows">{rows_html}
+            </div>
+        </div>"""
+
+
+def zip_species_block(zipd):
+    """Build a pollen.com species-level breakdown card for the ZIP source.
+    Shows top allergens with genus and plant type.
+    """
+    if not zipd or not zipd.get("top_allergens"):
+        return ""
+
+    allergens = zipd.get("top_allergens", [])
+    overall_idx = zipd.get("overall_index")
+    overall_lbl = zipd.get("overall_label", "")
+
+    pt_colors = {"Tree": "#1f6feb", "Grass": "#238636", "Weed": "#d29922", "": "#484f58"}
+
+    allergen_rows = ""
+    for t in allergens:
+        pt = t.get("plantType", "")
+        pt_col = pt_colors.get(pt, "#484f58")
+        genus = t.get("genus", "")
+        allergen_rows += f"""
+            <div class="pollen-row">
+                <span class="pollen-name">🌿 {t['name']} <span class="species-genus">({genus})</span></span>
+                <span class="badge" style="background:{pt_col}">{pt}</span>
+            </div>"""
+
+    idx_str = f"{overall_idx}" if overall_idx is not None else "—"
+
+    return f"""
+        <div class="source-card">
+            <div class="source-header">
+                <span class="source-tag zip">ZIP</span>
+                <span class="source-name">pollen.com (78750)</span>
+                <span class="source-loc">Austin TX 78750</span>
+            </div>
+            <div class="pollen-rows">{allergen_rows}
+            </div>
+            <div class="zip-overall">
+                <span class="zip-idx">{idx_str}</span>
+                <span class="zip-lbl">{overall_lbl}</span>
+            </div>
+            <div class="zip-note">Species breakdown via pollen.com &middot; Today's top allergens</div>
+        </div>"""
+
+
+def generate_html(gps_data, zip_data, aqi):
     ts = datetime.now().strftime("%Y-%m-%d %H:%M %Z")
-
-    t_cat, t_col, t_val = severity_pollen(data.get("tree"), data.get("tree_category"))
-    g_cat, g_col, g_val = severity_pollen(data.get("grass"), data.get("grass_category"))
-    r_cat, r_col, r_val = severity_pollen(data.get("ragweed"), data.get("ragweed_category"))
-    m_cat, m_col, m_val = severity_pollen(data.get("mold"), data.get("mold_category"))
-
-    uv_val = data.get("uv")
-    uv_cat = data.get("uv_category", "")
     aqi_val = aqi.get("aqi")
     aqi_cat, aqi_col = severity_aqi(aqi_val)
 
-    # Build forecast rows
-    forecast_rows = ""
-    for day in data.get("forecast", []):
-        date_str = day.get("date", "?")[5:]  # MM-DD
-        tree_v = day.get("tree", "—")
-        grass_v = day.get("grass", "—")
-        hi = day.get("temp_high", "—")
-        lo = day.get("temp_low", "—")
-        forecast_rows += f"""
-        <div class="forecast-row">
-            <span class="forecast-date">{date_str}</span>
-            <span class="forecast-temps">{lo}° – {hi}°F</span>
-            <span>🌳 {tree_v}</span>
-            <span>🌾 {grass_v}</span>
+    # Key Allergens section
+    allergens = top_allergens(gps_data)
+    allergen_rows = ""
+    for label, val, cat, col in allergens:
+        v = val if val is not None else "-"
+        allergen_rows += f"""
+            <div class="pollen-row">
+                <span class="pollen-name">{label}</span>
+                <div class="pollen-right">
+                    <span class="pollen-num">{v}</span>
+                    <span class="badge {col}">{cat}</span>
+                </div>
+            </div>"""
+
+    # GPS source card
+    gps_block = source_block(gps_data, is_gps=True)
+
+    # ZIP source card - species-level if available, else fallback
+    if zip_data and zip_data.get("top_allergens"):
+        zip_block = zip_species_block(zip_data)
+    elif zip_data and zip_data.get("tree") is not None:
+        zip_block = source_block(zip_data, is_gps=False)
+    else:
+        zip_block = """
+        <div class="source-card">
+            <div class="source-header">
+                <span class="source-tag zip">ZIP</span>
+                <span class="source-name">pollen.com</span>
+                <span class="source-loc">Austin TX 78750 (ZIP)</span>
+            </div>
+            <div class="pollen-unavailable">
+                <p>pollen.com data currently unavailable.</p>
+                <p style="margin-top:6px;color:#8b949e;font-size:0.82rem">Only GPS/AccuWeather data is available.</p>
+            </div>
         </div>"""
 
-    # Weather headline
-    headline = data.get("headline", "")
-    weather_block = ""
-    if data.get("temp_high"):
-        weather_block = f"""
+    # Weather
+    weather = ""
+    if gps_data.get("temp_high"):
+        weather = f"""
         <div class="card">
             <h2>Today's Weather</h2>
             <div class="weather-row">
-                <span class="temp-big">{data['temp_high']}°F</span>
-                <span class="temp-range">/ {data.get('temp_low', '?')}°F</span>
-                <span class="sun-info">☀️ {data.get('hours_of_sun', '?')}h sun</span>
+                <span class="temp-big">{gps_data["temp_high"]}°F</span>
+                <span class="temp-range">/ {gps_data.get("temp_low","?")}°F</span>
+                <span class="sun-info">☀️ {gps_data.get("hours_of_sun","?")}h sun</span>
             </div>
-            {f'<p class="headline">{headline}</p>' if headline else ''}
+            {('<p class="headline">' + gps_data["headline"] + '</p>') if gps_data.get("headline") else ''}
+        </div>"""
+
+    # 5-day forecast
+    fc_rows = ""
+    for day in gps_data.get("forecast", []):
+        fc_rows += f"""
+        <div class="forecast-row">
+            <span class="forecast-date">{day.get("date","?")[5:]}</span>
+            <span class="forecast-temps">{day.get("temp_low","?")}°–{day.get("temp_high","?")}°F</span>
+            <span>🌳 {day.get("tree","?")}</span>
+            <span>🌾 {day.get("grass","?")}</span>
         </div>"""
 
     return f"""<!DOCTYPE html>
@@ -219,26 +417,39 @@ def generate_html(data, aqi):
         .location {{ color: #8b949e; font-size: 0.9rem; margin: 8px 0 24px; }}
         .card {{ background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 16px; }}
         .card h2 {{ font-size: 0.85rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 14px; border-bottom: 1px solid #21262d; padding-bottom: 8px; }}
-        .pollen-row {{ display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #21262d; }}
+        .source-card {{ background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; margin-bottom: 12px; }}
+        .source-header {{ display: flex; align-items: center; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid #21262d; padding-bottom: 10px; }}
+        .source-tag {{ font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: 700; }}
+        .source-tag.gps {{ background: #1f6feb; }} .source-tag.zip {{ background: #238636; }}
+        .source-name {{ font-weight: 700; font-size: 0.95rem; }}
+        .source-loc {{ color: #8b949e; font-size: 0.8rem; margin-left: auto; }}
+        .pollen-row {{ display: flex; justify-content: space-between; align-items: center; padding: 9px 0; border-bottom: 1px solid #21262d; }}
         .pollen-row:last-child {{ border-bottom: none; }}
-        .pollen-name {{ font-size: 1rem; }}
-        .pollen-right {{ display: flex; align-items: center; gap: 10px; }}
-        .pollen-num {{ font-size: 1.3rem; font-weight: 700; min-width: 36px; text-align: right; }}
-        .badge {{ font-size: 0.7rem; padding: 2px 8px; border-radius: 10px; color: #fff; font-weight: 600; }}
-        .green {{ background: #238636; }} .yellow {{ background: #d29922; }}
-        .orange {{ background: #db6d28; }} .red {{ background: #da3633; }}
-        .gray {{ background: #484f58; }}
+        .pollen-name {{ font-size: 0.95rem; }}
+        .pollen-right {{ display: flex; align-items: center; gap: 8px; }}
+        .pollen-num {{ font-size: 1.2rem; font-weight: 700; min-width: 36px; text-align: right; }}
+        .pollen-unavailable {{ padding: 12px 0; color: #8b949e; font-size: 0.88rem; }}
+        .species-genus {{ color: #8b949e; font-size: 0.8rem; font-weight: 400; }}
+        .zip-overall {{ display: flex; align-items: center; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid #21262d; }}
+        .zip-idx {{ font-size: 1.5rem; font-weight: 800; }}
+        .zip-lbl {{ color: #8b949e; font-size: 0.85rem; }}
+        .zip-note {{ color: #484f58; font-size: 0.75rem; margin-top: 8px; }}
+        .badge {{ font-size: 0.68rem; padding: 2px 7px; border-radius: 10px; color: #fff; font-weight: 600; }}
+        .lightgreen {{ background: #3fb950; }} .green {{ background: #238636; }}
+        .yellow {{ background: #d29922; }} .orange {{ background: #db6d28; }}
+        .red {{ background: #da3633; }} .purple {{ background: #8957e5; }}
+        .maroon {{ background: #b62324; }} .gray {{ background: #484f58; }}
         .aqi-section {{ display: flex; align-items: center; gap: 16px; }}
         .aqi-num {{ font-size: 2.5rem; font-weight: 800; }}
-        .forecast-row {{ display: grid; grid-template-columns: 60px 1fr 50px 50px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #21262d; font-size: 0.9rem; }}
-        .forecast-row:last-child {{ border-bottom: none; }}
-        .forecast-date {{ color: #8b949e; }}
-        .forecast-temps {{ color: #8b949e; }}
         .weather-row {{ display: flex; align-items: baseline; gap: 12px; }}
         .temp-big {{ font-size: 2rem; font-weight: 800; }}
         .temp-range {{ color: #8b949e; }}
         .sun-info {{ color: #8b949e; font-size: 0.85rem; }}
         .headline {{ margin-top: 10px; color: #d29922; font-size: 0.9rem; }}
+        .forecast-row {{ display: grid; grid-template-columns: 60px 1fr 50px 50px; gap: 8px; align-items: center; padding: 8px 0; border-bottom: 1px solid #21262d; font-size: 0.9rem; }}
+        .forecast-row:last-child {{ border-bottom: none; }}
+        .forecast-date {{ color: #8b949e; }}
+        .forecast-temps {{ color: #8b949e; }}
         .footer {{ text-align: center; color: #484f58; font-size: 0.8rem; margin-top: 24px; }}
     </style>
 </head>
@@ -249,101 +460,85 @@ def generate_html(data, aqi):
         <p class="location">📍 10625 Glass Mountain Trl, Austin TX 78750</p>
 
         <div class="card">
-            <h2>Pollen Levels</h2>
-            <div class="pollen-row">
-                <span class="pollen-name">🌳 Tree</span>
-                <div class="pollen-right">
-                    <span class="pollen-num">{t_val if t_val is not None else '—'}</span>
-                    <span class="badge {t_col}">{t_cat}</span>
-                </div>
-            </div>
-            <div class="pollen-row">
-                <span class="pollen-name">🌾 Grass</span>
-                <div class="pollen-right">
-                    <span class="pollen-num">{g_val if g_val is not None else '—'}</span>
-                    <span class="badge {g_col}">{g_cat}</span>
-                </div>
-            </div>
-            <div class="pollen-row">
-                <span class="pollen-name">🌼 Ragweed</span>
-                <div class="pollen-right">
-                    <span class="pollen-num">{r_val if r_val is not None else '—'}</span>
-                    <span class="badge {r_col}">{r_cat}</span>
-                </div>
-            </div>
-            <div class="pollen-row">
-                <span class="pollen-name">🍄 Mold</span>
-                <div class="pollen-right">
-                    <span class="pollen-num">{m_val if m_val is not None else '—'}</span>
-                    <span class="badge {m_col}">{m_cat}</span>
-                </div>
+            <h2>🌡️ Key Allergens Today</h2>
+            <p style="color:#8b949e;font-size:0.82rem;margin-bottom:12px">Primary outdoor allergens - sorted by severity &nbsp;⭐ = top contributor</p>
+            <div class="pollen-rows">{allergen_rows}
             </div>
         </div>
 
+{gps_block}
+{zip_block}
+
         <div class="card">
-            <h2>Air Quality Index</h2>
+            <h2>🌬️ Air Quality</h2>
             <div class="aqi-section">
-                <span class="aqi-num">{aqi_val if aqi_val else '—'}</span>
-                <div>
-                    <div class="badge {aqi_col}" style="font-size:0.85rem;padding:3px 10px;">{aqi_cat}</div>
-                    <p style="color:#8b949e;font-size:0.8rem;margin-top:4px">Source: {aqi.get('source', 'N/A')}</p>
-                </div>
+                <span class="aqi-num">{aqi.get("aqi") or "—"}</span>
+                <span class="badge {aqi_col}">{aqi_cat}</span>
+                {('<span style="color:#8b949e">PM2.5: ' + str(aqi.get("pm25") or "—") + '</span>') if aqi.get("pm25") else ''}
             </div>
         </div>
 
-        {weather_block}
+{weather}
 
         <div class="card">
-            <h2>5-Day Forecast</h2>
-            {forecast_rows}
+            <h2>📅 5-Day Forecast</h2>
+            <div class="forecast-row header">
+                <span></span><span></span><span>🌳</span><span>🌾</span>
+            </div>{fc_rows}
         </div>
 
-        <p class="footer">pollen-report · Austin TX · hanyunfan/hermes</p>
+        <p class="footer">Sources: AccuWeather (GPS) + pollen.com (ZIP) for Austin TX 78750</p>
     </div>
 </body>
 </html>"""
 
 
-# --- Main ---
+# ─── Main ────────────────────────────────────────────────────────────────────────
 
 def main():
-    parser = argparse.ArgumentParser(description="Austin TX Daily Pollen Report")
-    parser.add_argument("--output", default=OUTPUT_JSON, help="JSON output path")
-    parser.add_argument("--html", default=DEFAULT_HTML, help="HTML report output path")
-    parser.add_argument("--test", action="store_true", help="Print HTML to stdout")
+    parser = argparse.ArgumentParser(description="Austin Pollen Report Scraper")
+    parser.add_argument("--output", default=OUTPUT_JSON, help="Output JSON path")
+    parser.add_argument("--html", default=DEFAULT_HTML, help="Output HTML path")
+    parser.add_argument("--test", action="store_true", help="Print outputs to stdout")
     args = parser.parse_args()
 
-    os.makedirs(DATA_DIR, exist_ok=True)
-
-    # Fetch data
-    data = fetch_pollen_data()
-    if not data:
-        print("ERROR: Could not fetch pollen data", file=sys.stderr)
-        data = {}
-
+    gps_raw = fetch_gps_data()
+    gps_data = parse_gps_data(gps_raw) if gps_raw else {}
+    zip_raw = fetch_zip_data()
+    zip_data = parse_zip_data(zip_raw)
     aqi = fetch_aqi()
 
-    # Add metadata
-    data["timestamp"] = datetime.now().isoformat()
-    data["source"] = "pollencount.app (AccuWeather)"
-    data["location"] = {"lat": GPS_LAT, "lng": GPS_LNG, "zip": ZIP_CODE}
+    # Key allergens (GPS-based)
+    allergens = top_allergens(gps_data)
+    top = allergens[0] if allergens else None
+    top_label = top[0] if top else None
+    top_val = top[1] if top else None
+    top_cat = top[2] if top else None
 
-    # Save JSON
-    with open(args.output, "w") as f:
-        json.dump(data, f, indent=2)
-    print(f"Saved: {args.output}")
+    output = {
+        "timestamp": datetime.now().isoformat(),
+        "location": "10625 Glass Mountain Trl, Austin TX 78750",
+        "gps": gps_data,
+        "zip": zip_data,
+        "aqi": aqi,
+        "top_allergen": top_label,
+        "top_allergen_value": top_val,
+        "top_allergen_category": top_cat,
+    }
 
-    # Generate and save HTML
-    html = generate_html(data, aqi)
-    with open(args.html, "w") as f:
-        f.write(html)
-    print(f"Saved: {args.html}")
+    html = generate_html(gps_data, zip_data, aqi)
 
     if args.test:
+        print(json.dumps(output, indent=2))
         print(html)
-
-    return 0
+    else:
+        with open(args.output, "w") as f:
+            json.dump(output, f, indent=2)
+        with open(args.html, "w") as f:
+            f.write(html)
+        print(f"JSON: {args.output}")
+        print(f"HTML: {args.html}")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
