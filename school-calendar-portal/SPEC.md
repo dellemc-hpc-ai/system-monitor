@@ -1,48 +1,45 @@
-# Custody Calendar Generator — System Specification (v2)
+# Custody Calendar Generator — System Specification (v3)
+
+> **Live demo: https://hanyunfan.github.io/hermes/school-calendar-portal/**
 
 ## 1. Core Purpose
 
 **The single goal of this system: show which parent has the child on any given day.**
 
-Given a school district, a custody schedule (derived from Texas statute), and a choice of mode (SPO or ESPO), produce a day-by-day calendar answering: "On this date, is the child with Dad or Mom?"
+Given a school district, Texas custody statutes, and a choice of mode (SPO or ESPO), produce a day-by-day calendar answering: "On this date, is the child with Dad or Mom?"
 
 Everything else — statute parsing, rule building, interval computation, HTML generation — serves that one purpose.
 
 ---
 
-## 2. Core Principle
-
-**No hard-coded rules.** Every rule comes from either:
-- The applicable state statute (parsed from statute template JSON)
-- User input (addresses)
-
----
-
 ## 2. Two Modes: SPO vs ESPO
 
-These are the two standard Texas modes (§153.312 + §153.317 options). The user picks one.
+These are the two standard Texas modes. The user picks one via the UI toggle.
 
-| Feature | SPO (§153.312 default) | ESPO (§153.312 + §153.317 extended) |
-|---------|----------------------|-------------------------------------|
-| Weekend | 1st/3rd/5th Friday 6pm → Sunday 6pm | Same, but starts at school dismissal |
+| Feature | SPO | ESPO |
+|---------|-----|------|
 | Thursday | 6pm → 8pm (evening only) | School dismissal Thu → school resumes Fri (overnight) |
-| Fri holiday extends weekend | To Monday 6pm | To Monday 6pm, starting Thu |
+| Weekend | 1st/3rd/5th Fri 6pm → Sun 6pm | Same, but starts at school dismissal Fri |
+| Holiday extension | To Monday 6pm | To Monday 6pm, starting Thu |
+| Weekend extends through noschool gaps | Yes | Yes |
 | Long school vacation | §153.312 | §153.312 |
 
-ESPO = SPO + §153.317 election to extend times. Both are legally defined.
-**The system supports both; the user selects one.**
+**ESPO** = SPO + §153.317 election to extend times. Both are legally defined options.
 
 ---
 
-## 3. Distance Rules (Texas Only)
+## 3. Texas Statute References
 
-| Distance | Applicable Section |
-|-----------|-------------------|
-| ≤ 50 miles | §153.312 (parents ≤ 50 mi apart) |
-| 50-100 miles | §153.312 (simplified, same as ≤50) |
-| > 100 miles | §153.313 (long distance) |
+All rules derive from Family Code Chapter 153:
+https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm
 
-Distance is computed via Haversine from both parent addresses — no hardcoding.
+| Section | Topic |
+|---------|-------|
+| [§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) | SPO default — weekend pattern, Thursday, spring break, summer |
+| [§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313) | Long-distance (>100 miles) simplified schedule |
+| [§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314) | Christmas (split at noon Dec 28), Thanksgiving holiday rules |
+| [§153.315](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315) | Single-day noschool days — inherits custodian from preceding day |
+| [§153.317](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317) | ESPO extended times election |
 
 ---
 
@@ -51,267 +48,247 @@ Distance is computed via Haversine from both parent addresses — no hardcoding.
 ```
 school-calendar-portal/
 ├── inputs/
-│   ├── dad_addr.txt       ← Dad's address (one per line)
-│   └── mom_addr.txt       ← Mom's address (empty = same as dad's)
-├── data/
-│   └── <state>_<district_id>/
-│       ├── raw_calendar.json      ← Raw HTML fetch
-│       ├── standard_calendar.json  ← Normalized school calendar
-│       ├── statute.json           ← Parsed statute for this state
-│       ├── custody_rules.json     ← Final rules (from statute + distance + mode)
-│       ├── esp_o_intervals.json   ← ESPO day-by-day custodian
-│       └── spo_intervals.json     ← SPO day-by-day custodian
-├── src/
-│   ├── geolocator.py          ← Nominatim: address → lat/lon
-│   ├── district_finder.py     ← NCES CCD API (state-filtered): lat/lon → district
-│   ├── calendar_fetcher.py    ← Fetch + parse district calendar (try multiple methods)
-│   ├── calendar_normalizer.py  ← Raw → standard calendar JSON
-│   ├── statute_loader.py       ← Template JSON → statute.json (with elections resolved)
-│   ├── rule_builder.py        ← statute.json + distance + mode → custody_rules.json
-│   ├── custody_calculator.py  ← custody_rules.json + standard_calendar → intervals JSON
-│   ├── esp_o_generator.py      ← ESPO intervals → HTML
-│   ├── spo_generator.py       ← SPO intervals → HTML
-│   └── shared_utils.py        ← Haversine, date utils, I18N strings
+│   ├── dad_addr.txt              # Dad's address (one per line)
+│   └── mom_addr.txt              # Mom's address (empty = same as Dad's)
 ├── config/
 │   └── state_statute_templates/
-│       └── texas.json         ← TX statute rules + §153.312/313/314/315/317
-├── main.py                    ← Orchestration
-└── SPEC.md
+│       └── texas.json            # TX §153.312/313/314/315/317 rules (source of truth)
+├── data/
+│   └── processed/
+│       ├── esp_o_intervals.json  # Generated: ESPO custody intervals
+│       └── spo_intervals.json    # Generated: SPO custody intervals
+├── scripts/
+│   └── main.py                   # Canonical pipeline entry point
+├── src/
+│   ├── geolocator.py             # Nominatim: address → lat/lon + haversine
+│   ├── district_finder.py        # NCES CCD API: lat/lon → district LEAID
+│   ├── statute_loader.py         # Load + resolve texas.json statute template
+│   ├── rule_builder.py           # statute + distance + mode → custody_rules.json
+│   ├── custody_interval_calculator/
+│   │   └── interval_generator.py  # CustodyIntervalGenerator: custody_rules + calendar → intervals
+│   └── static_web_generator/
+│       └── html_builder.py       # HTMLBuilder: intervals → index.html
+└── index.html                    # Generated output (the only canonical HTML)
 ```
 
 ---
 
-## 5. Address Input (`inputs/dad_addr.txt`, `inputs/mom_addr.txt`)
+## 5. Address Input
 
-Format: one address per line, e.g.
+Format: one address per line in `inputs/dad_addr.txt` / `inputs/mom_addr.txt`.
+
+Example:
 ```
 Glass Mountain Trl, Austin, TX 78735
 ```
-- `mom_addr.txt` empty → distance = 0 → defaults to §153.312 (same address)
+
+- `mom_addr.txt` empty → same address as Dad → distance = 0 → defaults to §153.312
 - Distance computed with Haversine from both geocoded lat/lon
 
 ---
 
-## 6. NCES District Finder
+## 6. District Finder (NCES CCD API)
 
-**On first run for a state:**
+**Endpoint** (2023 CCD):
 ```
 GET https://api.census.gov/data/2023/ccd/lau/lea?get=LEAID,LEANM,LSTATE,LATCOD,LONCOD&for=state:*&district_type=1
 ```
-Filter by `LSTATE = <state_abbrev>`.
 
-**Cache:** `config/nces_<state>.json`, refreshed if > 6 months old.
+Filter by `LSTATE = "TX"`.
 
-**Matching:** For each parent lat/lon, compute Haversine distance to every district centroid in the state. Select district with minimum distance to Dad's home.
+**Matching:** For Dad's lat/lon, compute Haversine distance to every district centroid in Texas. Select district with minimum distance.
 
----
-
-## 7. Calendar Fetcher (Try in Order)
-
-1. **ICS/ABP feed** — many districts publish `.ics` calendars
-2. **District website scraping** — BeautifulSoup + known patterns for common district CMS types
-3. **Manual upload** — if methods 1+2 fail, prompt user to upload PDF/image/ICS
-
-**Fallback:** User uploads `standard_calendar.json` directly (template provided).
+**Cache:** `config/nces_tx.json`, refreshed if > 6 months old.
 
 ---
 
-## 8. Statute Template Format (`config/state_statute_templates/texas.json`)
+## 7. Statute Template Format (`config/state_statute_templates/texas.json`)
 
-State-agnostic semantic keys. No statute numbers in rule engine logic.
+State-agnostic semantic keys. No Texas statute numbers in rule engine logic.
 
-```json
-{
-  "state": "TX",
-  "state_name": "Texas",
-  "default_mode": "spo",
-  "modes": {
-    "spo": {
-      "description": "Standard Possession Order — §153.312 default",
-      "weekend": {
-        "pattern": "1st_3rd_5th_friday",
-        "start": { "time": "18:00", "anchor": "friday_school_dismissal" },
-        "end": { "time": "18:00", "anchor": "sunday" },
-        "parent": "possessory"
-      },
-      "thursday": {
-        "start": { "time": "18:00", "anchor": "thursday" },
-        "end": { "time": "20:00", "anchor": "thursday" },
-        "parent": "possessory",
-        "overnight": false
-      }
-    },
-    "espo": {
-      "description": "Extended SPO — §153.312 + §153.317 extended times",
-      "weekend": {
-        "pattern": "1st_3rd_5th_friday",
-        "start": { "time": "school_dismissal", "anchor": "friday" },
-        "end": { "time": "school_dismissal", "anchor": "sunday" },
-        "parent": "possessory"
-      },
-      "thursday": {
-        "start": { "time": "school_dismissal", "anchor": "thursday" },
-        "end": { "time": "school_resumption", "anchor": "friday" },
-        "parent": "possessory",
-        "overnight": true
-      }
-    }
-  },
-  "distance_rules": {
-    "under_50":    { "statute": "153.312", "description": "≤ 50 miles" },
-    "50_to_100":   { "statute": "153.312", "description": "50–100 miles (same as ≤50)" },
-    "over_100":    { "statute": "153.313", "description": "> 100 miles" }
-  },
-  "holidays": {
-    "thanksgiving": {
-      "description": "§153.314(3): whole period to one parent",
-      "start": { "anchor": "school_dismissal_before_thanksgiving" },
-      "end": { "anchor": "sunday_6pm_after_thanksgiving" },
-      "alternation": { "type": "odd_even_year", "base": "calendar_year_of_break_start" },
-      "odd_year":  "possessory",
-      "even_year": "managing"
-    },
-    "christmas": {
-      "description": "§153.314(1)(2): split at noon Dec 28",
-      "split": { "month": 12, "day": 28, "hour": 12 },
-      "alternation": { "type": "odd_even_year", "base": "calendar_year_of_break_start" },
-      "odd_year":  { "first_half": "possessory",  "second_half": "managing" },
-      "even_year": { "first_half": "managing", "second_half": "possessory" }
-    },
-    "spring_break": {
-      "description": "§153.312(b)(1): full period, alternating",
-      "alternation": { "type": "odd_even_year", "base": "calendar_year_of_break_start" },
-      "odd_year":  "managing",
-      "even_year": "possessory"
-    }
-  },
-  "summertime": {
-    "description": "§153.312(b)(2): 30 days to possessory, remainder to managing",
-    "possessory_days": { "start": "july_1", "end": "july_30", "consecutive": true },
-    "before_possessory": "managing",
-    "after_possessory":  "managing",
-    "notice_deadline": "april_1"
-  },
-  "parents_day": {
-    "fathers_day": {
-      "description": "§153.314(5): Fri 6pm → Sun 6pm",
-      "start": { "anchor": "friday_before_fathers_day_6pm" },
-      "end":   { "anchor": "fathers_day_6pm" },
-      "parent": "father"
-    },
-    "mothers_day": {
-      "description": "§153.314(6): Fri 6pm → Sun 6pm",
-      "start": { "anchor": "friday_before_mothers_day_6pm" },
-      "end":   { "anchor": "mothers_day_6pm" },
-      "parent": "mother"
-    }
-  },
-  "conservator_labels": {
-    "possessory": "dad",
-    "managing":   "mom",
-    "father":     "dad",
-    "mother":     "mom"
-  }
-}
-```
+Key structure:
+- `modes`: spo / espo — different Thursday and weekend start/end times
+- `holidays`: christmas, thanksgiving, spring_break — each with odd_even_year alternation
+- `summertime`: Dad July 1–30 (30 consecutive days), Mom the rest
+- `conservator_labels`: possessory → dad, managing → mom
 
 ---
 
-## 9. Rule Builder
+## 8. Rule Builder
 
-**Inputs:** `statute.json` + distance + mode (spo/espo) + `standard_calendar.json`
+**Inputs:** `statute.json` + distance + mode (spo/espo) + standard calendar
 
 **Logic:**
 ```
 distance = haversine(dad_latlon, mom_latlon)
 if distance <= 50:   rule = statute.distance_rules.under_50
 elif distance <= 100: rule = statute.distance_rules.50_to_100
-else:                 rule = statute.distance_rules.over_100
-
-selected_mode = statute.modes[user_selected_mode]  # user picks spo or espo
+else:                rule = statute.distance_rules.over_100
 ```
 
-**Output:** `custody_rules.json` — concrete rules (no abstract conservator roles, resolved to dad/mom)
+**Output:** `custody_rules.json` — concrete rules with dad/mom resolved (no abstract conservator roles).
 
 ---
 
-## 10. Custody Calculator
+## 9. Custody Interval Generator (`CustodyIntervalGenerator`)
 
-Priority order (checked top to bottom each day):
-1. **Parents day** (Fathers Day / Mothers Day) — overrides **everything**, including summer, spring break, Christmas, Thanksgiving, weekends, Thursday
-2. School breaks (thanksgiving, christmas, spring, summer)
-3. Regular school day rules: Thursday (dad), 1st/3rd/5th Friday (dad)
-4. Fallback: managing conservator (mom)
+Builds day-by-day ESPO and SPO custody intervals from `custody_rules.json` and `standard_calendar.json`.
 
-**Summer = day after school ends through the day before school starts again.**
-Pre-instruction days (e.g., Aug 13-17, 2025: teachers report, students don't) are
-treated as summer because kids are not yet in school.
+**Two-pass approach:**
 
-For each day in `[May 22 two years prior through latest school year end]`:
-1. Is it Fathers Day or Mothers Day weekend? → that parent
-2. Is it in a break (including pre-school summer gap)? → apply break rule
-3. Is it a regular school day?
-   - Thursday → dad
-   - 1st/3rd/5th Friday? → dad
-   - else → mom
+**Pass 1**: Compute primary intervals (breaks, weekends, Thursdays) into `date_winner` dict — lowest priority wins.
 
----
+**Pass 2**: For each `noschool_day` (priority 6), look up the custodian from `date_winner` of the preceding calendar day, and extend through any noschool gaps.
 
-## 11. Output Files
+**Priority order** (lowest wins):
 
-- `data/<state>_<district>/espo_intervals.json` → `espo_calendar.html`
-- `data/<state>_<district>/spo_intervals.json`  → `spo_calendar.html`
-- Both HTML files: blue = Dad, pink = Mom
-- I18N toggle (EN/CN) in both
+| Priority | Interval | Notes |
+|----------|-----------|-------|
+| 1 | fathers_day, mothers_day | Override everything |
+| 2 | spring_break | |
+| 3 | thanksgiving | |
+| 4 | christmas | |
+| 5 | summer_* | |
+| 6 | noschool_day | **Wins over espo_weekend (8) and mom_weekend (9)** |
+| 7 | espo_thursday / spo_thursday | Mode-specific reason key |
+| 8 | espo_weekend / spo_weekend | Mode-specific reason key |
+| 9 | mom_weekend | |
+| 10 | regular_school_day | |
 
 ---
 
-## 12. Verification Checklist (must pass before push)
+## 10. Single-Day Noschool Days — §153.315(b)
 
-- [x] Thanksgiving 2025 (odd year) → Dad (whole period)
-- [x] Christmas 2025 Dec 19-28 → Dad (odd year, first half)
-- [x] Christmas 2026 Dec 18-28 → Mom (even year, first half)
+**NOT odd/even year alternation.**
+
+Per §153.315(b), possession continues uninterrupted across noschool days — the custodian "flows through" from whatever interval the day before belonged to.
+
+**Rule**: The custodian for a noschool day = custodian of the last school day before the noschool period began.
+
+**When a noschool day falls on Friday**: noschool possession extends through the entire weekend (Sat/Sun) to the day before school resumes. These days use `noschool_day` (priority 6), NOT `espo_weekend`/`mom_weekend` (priorities 8/9) — so they correctly override weekend rules.
+
+**Implementation**: `_noschool_intervals()` uses `date_winner` (Pass 1 result) to look up the predecessor custodian. When `extend_through_gap()` returns `None` (no school in the gap), the standalone noschool day is absorbed into the current group — `group_end = d` (NOT `d - 1`).
+
+**Fallback**: If a noschool day has no preceding school day within the school year (e.g., first day of school), falls back to `dad`.
+
+---
+
+## 11. Regular Schedule
+
+### ESPO Mode
+
+| Day | Who | Reason |
+|-----|-----|--------|
+| Mon | Mom | regular_school_day |
+| Tue | Mom | regular_school_day |
+| Wed | Mom | regular_school_day |
+| Thu | Dad | espo_thursday (school dismissal → Fri school resumes) |
+| Fri | Mom (unless 1st/3rd/5th) | regular_school_day |
+| Sat/Sun | Dad (if 1st/3rd/5th Fri) | espo_weekend |
+| Sat/Sun | Mom (if 2nd/4th Fri) | mom_weekend |
+
+**1st/3rd/5th weekend rule**: Count the Friday's position in the month:
+- 1st–7th = 1st weekend (Dad)
+- 8th–14th = 2nd weekend (Mom)
+- 15th–21st = 3rd weekend (Dad)
+- 22nd–28th = 4th weekend (Mom)
+- 29th–31st = 5th weekend (Dad)
+
+### SPO Mode
+
+Same as ESPO except:
+- **Thu** = Dad 6pm–8pm only → `spo_thursday`
+- **Weekend** = Friday 6pm to Sunday 6pm → `spo_weekend`
+
+**The `reason` label in interval data MUST differ by mode.** `_weekend_thursday_intervals()` must use `spo_thursday`/`spo_weekend` for SPO and `espo_thursday`/`espo_weekend` for ESPO. If both modes use the same labels, SPO and ESPO display identically — a critical bug.
+
+---
+
+## 12. Holiday Rules
+
+### Christmas §153.314(1)(2)
+
+| Period | Odd Year | Even Year |
+|--------|----------|-----------|
+| First half: school dismissal → noon Dec 28 | Mom | Dad |
+| Second half: noon Dec 28 → 6pm day before school resumes | Dad | Mom |
+
+**Start date** = last school day before district's `christmas.start` (walk backward).
+
+**Dec 28 split**: Custody transfers at **NOON**. Render as split cell (AM = first-half custodian, PM = second-half custodian).
+
+### Thanksgiving §153.314(3)
+
+| Year | Who gets whole Thanksgiving period |
+|------|-------------------------------------|
+| Odd | Dad (possessory) |
+| Even | Mom (managing) |
+
+**Start date** = last school day before district's Thanksgiving break start. Walk backward from `(district_start - 1 day)` until hitting a Mon–Fri school day.
+
+### Spring Break §153.312(b)(1)
+
+| Year | Who gets spring break |
+|------|----------------------|
+| Odd | Mom |
+| Even | Dad |
+
+**Start**: 6pm on the last school day before spring break begins.
+**End**: 6pm on the **day before school resumes** (NOT the district's `spring.end`).
+
+### Summer §153.312(b)(2)
+
+- **Dad**: July 1–30 (30 consecutive days)
+- **Mom**: Before Dad + after Dad
+
+---
+
+## 13. Odd/Even Year Determination
+
+Uses **calendar year** (not school year). Spring break 2026 = even year = Dad.
+
+---
+
+## 14. Output Files
+
+```
+data/processed/espo_intervals.json  → embedded in index.html as ESPO_INTERVALS
+data/processed/spo_intervals.json   → embedded in index.html as SPO_INTERVALS
+index.html                          → the single canonical output (served by GitHub Pages)
+```
+
+Both ESPO and SPO intervals are embedded in the same `index.html`. The UI toggles between them client-side.
+
+---
+
+## 15. HTML Output
+
+Pure static HTML (`index.html`) — no server required:
+- **SPO ↔ ESPO** mode toggle
+- **EN ↔ CN** bilingual toggle
+- **Color coding**: Dad (blue) / Mom (pink)
+- **Month navigation** (current + next month)
+- **Hover tooltips** with date + custodian details
+- **Christmas Dec 28 split cell** (AM/PM different colors)
+- **Footer**: TX statute links (§153.312/313/314/315/317) + district + git commit hash + generation timestamp
+
+---
+
+## 16. Verification Checklist
+
+- [x] Christmas 2025 Dec 19–28 → Mom (odd year, first half)
+- [x] Christmas 2025 Dec 29–Jan 5 → Dad (odd year, second half)
+- [x] Christmas 2026 Dec 18–28 → Dad (even year, first half)
+- [x] Christmas 2026 Dec 29–Jan 5 → Mom (even year, second half)
+- [x] Christmas Dec 28 split cell (AM/PM different colors)
+- [x] Thanksgiving 2025 (odd year) → Dad
+- [x] Thanksgiving 2026 (even year) → Mom
 - [x] Spring Break 2026 (even year) → Dad
-- [x] Summer: July 1-30 → Dad, July 31+ → Mom
-- [x] Aug 13-17, 2025 (pre-school summer gap) → Mom (summer_remainder)
-- [x] Father's Day 2026 → Dad (overrides summer break)
-- [x] Mother's Day 2026 → Mom
-- [x] ESPO Thursday intervals → Dad
-- [x] SPO Thursday intervals (evening only) → Dad
+- [x] Summer: July 1–30 → Dad, July 31+ → Mom
+- [x] Father's Day 2026 → Dad (overrides summer)
+- [x] Mother's Day 2026 → Mom (overrides summer)
+- [x] ESPO Thursday → Dad (overnight, school dismissal → Fri resume)
+- [x] SPO Thursday → Dad (evening only 6pm–8pm)
 - [x] 1st/3rd/5th Friday weekends correct (not every Friday)
-- [ ] NCES district lookup → verified working (pending API fix)
-- [ ] Calendar fetcher → verified working (pending)
-- [ ] HTML output → verified (pending)
-
----
-
-## 13. Implementation Priority
-
-1. `geolocator.py` + `district_finder.py` + address inputs
-2. `state_statute_templates/texas.json` (complete TX rules)
-3. `rule_builder.py` + `custody_calculator.py`
-4. `calendar_fetcher.py` + `calendar_normalizer.py`
-5. HTML generators
-6. `main.py` orchestration
-7. Cleanup debug scripts
-
----
-
-## 14. Cleanup (delete existing hard-coded files)
-
-```
-DELETE:
-- src/custody_interval_calculator/interval_generator.py  (replaced by custody_calculator.py)
-- src/calendar_fetcher_parser/data_normalizer.py          (replaced by calendar_normalizer.py)
-- scripts/check_*.py, scripts/debug_*.py, scripts/fix_*.py, scripts/temp_*.py
-- scripts/verify_*.py
-- scripts/fix_mothers_day.py
-- scripts/run_full_process.py                             (replaced by main.py)
-- config/texas_espo_spo_rules.json                        (replaced by texas.json)
-- output/espo-calendar-preview.html
-- espo-calendar-preview.html
-```
-
-**KEEP:**
-- `data/processed/rrisd_standard_calendar.json` (reference format only)
-- `src/calendar_fetcher_parser/calendar_fetcher.py` (reference for fetcher logic)
+- [x] Single-day noschool days → inherits custodian from preceding day (NOT odd/even alternating)
+- [x] Footer statute links are real `<a>` tags (not Markdown links rendered as text)
