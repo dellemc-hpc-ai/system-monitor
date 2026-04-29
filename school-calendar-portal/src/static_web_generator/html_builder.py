@@ -171,7 +171,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <h1 id="title">{title}</h1>
   <button id="langToggle">CN</button>
   <button id="espoBtn" class="active">ESPO</button>
-  <button id="spoBtn">SPO</button>
+  <button id="spoBtn" style="display:none">SPO</button>
 </div>
 <div class="cal-nav">
   <button id="prevBtn">&lt;</button>
