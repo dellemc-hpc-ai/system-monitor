@@ -185,7 +185,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <span><div class="split-swatch"></div> <span id="splitLegend">{split_day_label}</span></span>
 </div>
 <div class="calendar-grid" id="calendar"></div>
-<div class="footer"><a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.312" target="_blank">§153.312</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.312" target="_blank">§153.313</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.312" target="_blank">§153.314</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.312" target="_blank">§153.315</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.312" target="_blank">§153.317</a> -- {district} -- {commit_hash} ({timestamp})</div>
+<div class="footer"><a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.312" target="_blank">§153.312</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.313" target="_blank">§153.313</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.314" target="_blank">§153.314</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.315" target="_blank">§153.315</a> · <a href="https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153&artSec=153.317" target="_blank">§153.317</a> -- {district} -- {commit_hash} ({timestamp})</div>
 <script>
 const I18N = {i18n_json};
 const ESPO_INTERVALS = {espo_intervals_json};
