@@ -3,7 +3,18 @@ from datetime import date, timedelta
 
 def get_git_commit():
     try:
-        return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], text=True).strip()
+        # Use origin/main to get the actual latest commit even in worktrees
+        return subprocess.check_output(
+            ['git', 'log', '-1', '--format=%H', 'origin/main'], text=True
+        ).strip()[:8]
+    except:
+        return 'unknown'
+
+def get_git_timestamp():
+    try:
+        return subprocess.check_output(
+            ['git', 'log', '-1', '--format=%ci', 'origin/main'], text=True
+        ).strip()
     except:
         return 'unknown'
 
@@ -171,7 +182,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <span><div class="split-swatch"></div> <span id="splitLegend">{split_day_label}</span></span>
 </div>
 <div class="calendar-grid" id="calendar"></div>
-<div class="footer">TX Sec.153.314 -- {district} -- commit:{commit_hash}</div>
+<div class="footer">TX Sec.153.314 -- {district} -- commit:{commit_hash} ({timestamp})</div>
 <script>
 const I18N = {i18n_json};
 const ESPO_INTERVALS = {espo_intervals_json};
@@ -425,6 +436,7 @@ class HTMLBuilder:
             mom=I18N["en"]["mom"],
             split_day_label=split_label_en,
             commit_hash=get_git_commit(),
+            timestamp=get_git_timestamp(),
             espo_intervals_json=json.dumps(self.espo_intervals, ensure_ascii=False),
             spo_intervals_json=json.dumps(self.spo_intervals, ensure_ascii=False),
             i18n_json=json.dumps(I18N, ensure_ascii=False)
