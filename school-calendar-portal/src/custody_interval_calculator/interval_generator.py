@@ -474,6 +474,46 @@ class CustodyIntervalGenerator:
             prev_day = nd_date - timedelta(days=1)
             return custodian_for(prev_day)
 
+        def extend_through_gap(group_end: date, d: date) -> tuple[date, str]:
+            """
+            When a gap is found between standalone noschool days, scan the gap to
+            determine what happens.
+
+            - If the gap contains only non-school days (weekends + holidays),
+              school has NOT resumed — §153.315(b): possession continues
+              uninterrupted. The custodian of the preceding noschool day extends
+              through the entire gap (including weekends).
+            - If there is a regular school day in the gap, possession terminates
+              at that school day; the new noschool day starts fresh with the
+              custodian of that last school day.
+
+            Returns (new_group_end, custodian_for_new_group).
+            """
+            last_school_day = None
+            scan = d - timedelta(days=1)
+            # Scan ONLY within the gap (group_end+1 .. d-1) to find if school
+            # was in session during the gap. Don't scan past group_end.
+            while scan > group_end:
+                if scan.weekday() < 5 and scan not in self._no_school_dates:
+                    last_school_day = scan
+                    break
+                scan -= timedelta(days=1)
+
+            if last_school_day is not None:
+                # School was in session — possession terminates at that day.
+                return (group_end, custodian_for(last_school_day))
+            else:
+                # No school in gap — possession continues across the gap.
+                # Also extend past any consecutive weekends (Sat=5, Sun=6) that
+                # follow d-1, because if a holiday ends just before a weekend
+                # and school resumes after the weekend, the weekend possession
+                # follows the holiday (§153.315(b): "possession continues until
+                # school resumes").
+                extended_end = d - timedelta(days=1)
+                while extended_end.weekday() >= 5 and extended_end >= group_end:
+                    extended_end -= timedelta(days=1)
+                return (extended_end, None)  # None = keep current custodian
+
         intervals = []
         group_start = group_end = standalone[0]
         # §153.315(b): first noschool day inherits from the preceding calendar day
@@ -484,34 +524,36 @@ class CustodyIntervalGenerator:
                 # Consecutive noschool: extend the current group
                 group_end = d
             else:
-                # Gap found — §153.315(b): possession continues through the gap
-                # until school is in session again.
-                #
-                # Scan backward from d-1 through the gap to find the last day where
-                # school was actually in session. If the gap contains only non-school
-                # days (weekends + holidays), school has not resumed — custodian carries
-                # forward. If there is a regular school day in the gap, possession
-                # follows that day's pattern and the custodian resets.
-                last_school_day = None
-                scan = d - timedelta(days=1)
-                # Scan ONLY within the gap (group_end+1 .. d-1) to find if school
-                # was in session during the gap. Don't scan past group_end.
-                while scan > group_end:
-                    if scan.weekday() < 5 and scan not in self._no_school_dates:
-                        last_school_day = scan
-                        break
-                    scan -= timedelta(days=1)
-
-                if last_school_day is not None:
-                    # School was in session during the gap — §153.315(b): possession
-                    # terminates at that school day; emit the old group, then reset.
+                # Gap found
+                new_end, new_custodian = extend_through_gap(group_end, d)
+                if new_custodian is None:
+                    # Possession continues — extend across the gap
+                    group_end = new_end
+                else:
+                    # School was in session in gap — emit old group, start new one
                     intervals.append(CustodyInterval(group_start, group_end, current_custodian, "noschool_day", priority=6))
                     group_start = group_end = d
-                    current_custodian = custodian_for(last_school_day)
-                else:
-                    # No school in session in the gap — §153.315(b): possession
-                    # continues uninterrupted. Extend current group across the gap.
-                    group_end = d
+                    current_custodian = new_custodian
+
+        # §153.315(b): After the final noschool group, extend through any
+        # weekend days (Sat+Sun) that immediately follow, because school has not
+        # resumed and possession continues until school resumes.
+        # Example: a Friday holiday followed by Sat/Sun — weekend belongs to
+        # the holiday's custodian.
+        while True:
+            next_day = group_end + timedelta(days=1)
+            # Only extend through weekends (Sat=5, Sun=6)
+            if next_day.weekday() < 5:
+                break  # next day is a weekday, stop
+            # Only extend if within school year
+            if next_day > date.fromisoformat(sy.end):
+                break
+            # Check if a higher-priority interval already claims the next day
+            next_winner = (date_winner or {}).get(next_day)
+            if next_winner is not None and next_winner.priority < 6:
+                break  # higher-priority interval (spring break, etc.) already claims it
+            # Extend noschool possession through this weekend day
+            group_end = next_day
 
         # Emit the final noschool group
         intervals.append(CustodyInterval(group_start, group_end, current_custodian, "noschool_day", priority=6))
