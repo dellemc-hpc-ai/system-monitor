@@ -124,7 +124,7 @@ If both modes use `espo_thursday`/`espo_weekend` labels, SPO and ESPO display id
 
 ## Holiday Rules
 
-### Thanksgiving ([§153.314(3)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314))
+### Thanksgiving ([§153.314(3)](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153))
 
 Possession: 6pm on the day school is dismissed BEFORE Thanksgiving → 6pm following Sunday.
 
@@ -137,7 +137,7 @@ Possession: 6pm on the day school is dismissed BEFORE Thanksgiving → 6pm follo
 
 Example: RRISD 2025 — district break starts 11-24 (Mon, Thanksgiving week), but last school day = 11-21 (Fri). Possession starts 6pm 11-21 (Fri).
 
-### Christmas ([§153.314(1)(2)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314))
+### Christmas ([§153.314(1)(2)](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153))
 
 | Period | Odd Year | Even Year |
 |--------|----------|-----------|
@@ -150,7 +150,7 @@ Example: RRISD 2025 — district break starts 11-24 (Mon, Thanksgiving week), bu
 
 **Christmas labels in UI**: Do NOT hardcode "Dad" or "Mom" in the label — the custodian alternates by year. Labels should be "Christmas 1st half" / "Christmas 2nd half" (custodian shown via cell color).
 
-### Spring Break ([§153.312(b)(1)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312))
+### Spring Break ([§153.312(b)(1)](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153))
 
 Possession: 6pm on the day child is dismissed for spring vacation → 6pm on the day BEFORE school resumes.
 
@@ -161,12 +161,12 @@ Possession: 6pm on the day child is dismissed for spring vacation → 6pm on the
 
 **End date** = the day before school resumes (NOT the district's `spring.end`). Per RRISD: break 3/16–3/20, school resumes 3/23 (Mon), so custody ends 6pm 3/22 (Sunday).
 
-### Summer ([§153.312(b)(2)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312))
+### Summer ([§153.312(b)(2)](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153))
 
 - **Dad**: July 1–30 (30 consecutive days)
 - **Mom**: All other summer days (before Dad + after Dad)
 
-### Single-Day Noschool Days ([§153.315(b)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315))
+### Single-Day Noschool Days ([§153.315(b)](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153))
 
 **NOT odd/even year alternation.**
 
@@ -203,15 +203,15 @@ Uses **calendar year** (not school year). Spring break 2026 = even year = Dad.
 
 # Texas Statute References
 
-All TX custody rules: https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm
+All TX custody rules: https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153
 
 | Section | Topic |
 |---------|-------|
-| [§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) | SPO default — weekend, Thursday, spring break, summer |
-| [§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313) | Long-distance (>100 miles) simplified schedule |
-| [§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314) | Christmas, Thanksgiving holiday rules |
-| [§153.315](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315) | Single-day noschool days — inherits from preceding day (§153.315(b)) |
-| [§153.317](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317) | ESPO extended times election |
+| [§153.312](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | SPO default — weekend, Thursday, spring break, summer |
+| [§153.313](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | Long-distance (>100 miles) simplified schedule |
+| [§153.314](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | Christmas, Thanksgiving holiday rules |
+| [§153.315](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | Single-day noschool days — inherits from preceding day (§153.315(b)) |
+| [§153.317](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | ESPO extended times election |
 
 ---
 

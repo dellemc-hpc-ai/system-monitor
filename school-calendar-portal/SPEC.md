@@ -31,15 +31,15 @@ These are the two standard Texas modes. The user picks one via the UI toggle.
 ## 3. Texas Statute References
 
 All rules derive from Family Code Chapter 153:
-https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm
+https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153
 
 | Section | Topic |
 |---------|-------|
-| [§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) | SPO default — weekend pattern, Thursday, spring break, summer |
-| [§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313) | Long-distance (>100 miles) simplified schedule |
-| [§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314) | Christmas (split at noon Dec 28), Thanksgiving holiday rules |
-| [§153.315](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315) | Single-day noschool days — inherits custodian from preceding day |
-| [§153.317](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317) | ESPO extended times election |
+| [§153.312](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | SPO default — weekend pattern, Thursday, spring break, summer |
+| [§153.313](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | Long-distance (>100 miles) simplified schedule |
+| [§153.314](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | Christmas (split at noon Dec 28), Thanksgiving holiday rules |
+| [§153.315](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | Single-day noschool days — inherits custodian from preceding day |
+| [§153.317](https://statutes.capitol.texas.gov/?tab=1&code=FA&chapter=FA.153) | ESPO extended times election |
 
 ---
 
