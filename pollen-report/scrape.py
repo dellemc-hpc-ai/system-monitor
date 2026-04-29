@@ -9,7 +9,7 @@ Data sources:
   2. ZIP  (pollen.com via CDP): species-level data for the resolved ZIP code
 
 Usage:
-  python3 scrape.py [--address "10625 Glass Mountain Trl, Austin TX 78750"]
+  python3 scrape.py [--address "Spicewood Elementary School, Austin TX 78750"]
   python3 scrape.py --detect-ip        # use IP-based detection instead of address
   python3 scrape.py --output FILE --html FILE
   python3 scrape.py --test
@@ -25,7 +25,7 @@ import urllib.parse
 from datetime import datetime
 
 # ─── Defaults ─────────────────────────────────────────────────────────────────────
-DEFAULT_ADDRESS = "10625 Glass Mountain Trl, Austin TX 78750"
+DEFAULT_ADDRESS = "Spicewood Elementary School, Austin TX 78750"
 DEFAULT_LAT = 30.4403525
 DEFAULT_LNG = -97.81407276
 DEFAULT_ZIP = "78750"
@@ -34,7 +34,7 @@ DEFAULT_CITY = "Austin, TX 78750"
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 OUTPUT_JSON = os.path.join(DATA_DIR, "pollen-data.json")
 DEFAULT_HTML = os.path.join(DATA_DIR, "today.html")
-ZIP_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pollen_com_cdp.py")
+ZIP_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pollen_com_pw.py")
 
 
 # ─── Address Geocoding ──────────────────────────────────────────────────────────
@@ -513,7 +513,7 @@ def main():
         description="Pollen Report Scraper — geocodes an address to lat/lng/zip, fetches pollen data"
     )
     parser.add_argument("--address", default=DEFAULT_ADDRESS,
-        help="Street address to geocode. Default: 10625 Glass Mountain Trl, Austin TX 78750")
+        help="Street address to geocode. Default: Spicewood Elementary School, Austin TX 78750")
     parser.add_argument("--detect-ip", action="store_true",
         help="Use IP-based location detection instead of address geocoding")
     parser.add_argument("--output", default=OUTPUT_JSON, help="Output JSON path")
