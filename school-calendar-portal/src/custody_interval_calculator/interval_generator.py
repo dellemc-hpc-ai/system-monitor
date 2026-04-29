@@ -504,15 +504,12 @@ class CustodyIntervalGenerator:
                 return (group_end, custodian_for(last_school_day))
             else:
                 # No school in gap — possession continues across the gap.
-                # Also extend past any consecutive weekends (Sat=5, Sun=6) that
-                # follow d-1, because if a holiday ends just before a weekend
-                # and school resumes after the weekend, the weekend possession
-                # follows the holiday (§153.315(b): "possession continues until
-                # school resumes").
-                extended_end = d - timedelta(days=1)
-                while extended_end.weekday() >= 5 and extended_end >= group_end:
-                    extended_end -= timedelta(days=1)
-                return (extended_end, None)  # None = keep current custodian
+                # The entire gap (including any weekend days) belongs to the current
+                # custodian. Return the last day of the gap so that if the next
+                # standalone element falls on the next school day, it is treated as
+                # a new separate group (§153.315(b): possession continues until
+                # school resumes; when school IS in session, possession terminates).
+                return (d - timedelta(days=1), None)  # None = keep current custodian
 
         intervals = []
         group_start = group_end = standalone[0]
