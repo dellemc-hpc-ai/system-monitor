@@ -1,5 +1,5 @@
 import json, os, subprocess
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 def get_git_commit():
     try:
@@ -438,7 +438,7 @@ class HTMLBuilder:
             mom=I18N["en"]["mom"],
             split_day_label=split_label_en,
             commit_hash=get_git_commit(),
-            timestamp=get_git_timestamp(),
+            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             espo_intervals_json=json.dumps(self.espo_intervals, ensure_ascii=False),
             spo_intervals_json=json.dumps(self.spo_intervals, ensure_ascii=False),
             i18n_json=json.dumps(I18N, ensure_ascii=False)
