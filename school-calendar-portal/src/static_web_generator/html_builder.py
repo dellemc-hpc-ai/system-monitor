@@ -163,6 +163,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .legend .dad-swatch {{ width: 14px; height: 14px; border-radius: 3px; background: #dbeafe; border: 1px solid #1e40af; }}
   .legend .mom-swatch {{ width: 14px; height: 14px; border-radius: 3px; background: #fce7f3; border: 1px solid #9d174d; }}
   .legend .split-swatch {{ width: 14px; height: 14px; border-radius: 3px; background: linear-gradient(to bottom, #dbeafe 50%, #fce7f3 50%); border: 1px solid #aaa; }}
+  .footer a {{ color: #888; text-decoration: none; }}
   .footer {{ text-align: center; padding: 16px; color: #888; font-size: 0.8rem; }}
 </style>
 </head>
@@ -184,7 +185,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <span><div class="split-swatch"></div> <span id="splitLegend">{split_day_label}</span></span>
 </div>
 <div class="calendar-grid" id="calendar"></div>
-<div class="footer">[§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) · [§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313) · [§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314) · [§153.315](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315) · [§153.317](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317) -- {district} -- {commit_hash} ({timestamp})</div>
+<div class="footer"><a href="https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312" target="_blank">§153.312</a> · <a href="https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313" target="_blank">§153.313</a> · <a href="https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314" target="_blank">§153.314</a> · <a href="https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315" target="_blank">§153.315</a> · <a href="https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317" target="_blank">§153.317</a> -- {district} -- {commit_hash} ({timestamp})</div>
 <script>
 const I18N = {i18n_json};
 const ESPO_INTERVALS = {espo_intervals_json};
