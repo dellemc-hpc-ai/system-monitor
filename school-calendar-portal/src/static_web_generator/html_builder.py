@@ -184,7 +184,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <span><div class="split-swatch"></div> <span id="splitLegend">{split_day_label}</span></span>
 </div>
 <div class="calendar-grid" id="calendar"></div>
-<div class="footer">TX Sec.153.314 -- {district} -- commit:{commit_hash} ({timestamp})</div>
+<div class="footer">[§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) · [§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313) · [§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314) · [§153.315](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315) · [§153.317](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317) -- {district} -- {commit_hash} ({timestamp})</div>
 <script>
 const I18N = {i18n_json};
 const ESPO_INTERVALS = {espo_intervals_json};

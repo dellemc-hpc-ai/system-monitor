@@ -1,6 +1,6 @@
 # School Calendar Portal — Custody Calendar Generator
 
-Generate bilingual (EN/CN) custody calendars from any US school district calendar, using **Texas §153.312/313/314** custody rules. Supports both **SPO** (Standard Possession Order) and **ESPO** (Extended SPO) modes.
+Generate bilingual (EN/CN) custody calendars from any US school district calendar, using **Texas Family Code [§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) / [§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313) / [§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314)** custody rules. Supports both **SPO** (Standard Possession Order) and **ESPO** (Extended SPO) modes.
 
 **Live demo: https://hanyunfan.github.io/hermes/school-calendar-portal/**
 
@@ -21,7 +21,7 @@ District Finder (NCES CCD API) → Round Rock ISD
     ↓
 Calendar Fetcher (ICS / web scrape / manual)
     ↓
-Statute Loader (TX §153.312/313/314 rules)
+Statute Loader (TX [§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312)/[§153.313](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.313)/[§153.314](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314) rules)
     ↓
 Rule Builder → custody_rules.json
     ↓
@@ -164,7 +164,7 @@ When a date falls in multiple intervals, the one with the **lower priority numbe
 
 ### TX §153.314 Holiday Rules
 
-#### Christmas (§153.314(1)(2))
+#### Christmas ([§153.314(1)(2)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314))
 
 | Period | Odd Year | Even Year |
 |--------|----------|-----------|
@@ -173,13 +173,13 @@ When a date falls in multiple intervals, the one with the **lower priority numbe
 
 **Dec 28 split**: Custody transfers at noon. The calendar renders Dec 28 as a split cell (AM = first-half custodian, PM = second-half custodian).
 
-#### Thanksgiving (§153.314(3))
+#### Thanksgiving ([§153.314(3)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.314))
 
 | Period | Odd Year | Even Year |
 |--------|----------|-----------|
 | 6pm day before Thanksgiving → 6pm Sunday | Dad (possessory) | Mom (managing) |
 
-#### Spring Break (§153.312(b)(1))
+#### Spring Break ([§153.312(b)(1)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312))
 
 > "beginning at 6 p.m. on the day the child is dismissed from school for the spring vacation and ending at 6 p.m. on the day before school resumes after that vacation"
 
@@ -200,7 +200,7 @@ When a date falls in multiple intervals, the one with the **lower priority numbe
 
 **Note**: The district calendar's `spring.end` (last day of school's scheduled spring break, e.g., 3/20) may differ from "the day before school resumes" (e.g., 3/22). The statute uses the latter — it is a calendar date reference, not a reference to the district's break end.
 
-#### Summer (§153.312(b)(2))
+#### Summer ([§153.312(b)(2)](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312))
 
 - **Dad**: July 1–30 (30 consecutive days)
 - **Mom**: Before Dad's period + after Dad's period (the remainder)
@@ -210,6 +210,8 @@ Summer starts the day after the last school day and ends the day before school r
 #### Other Noschool Days
 
 Single-day no-school events (staff development days, holidays not listed above) inherit the custodian from the preceding calendar day via **§153.315(b)** — possession continues uninterrupted across noschool days, so the custodian "flows through" from whatever interval the day before belonged to.
+
+→ [§153.315](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.315)
 
 ### Odd/Even Year Determination
 
@@ -252,7 +254,7 @@ Every custody rule comes from the statute template (`config/state_statute_templa
 
 ### Two Modes: SPO vs ESPO
 
-| Feature | SPO (§153.312) | ESPO (§153.312 + §153.317) |
+| Feature | SPO ([§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312)) | ESPO ([§153.312](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.312) + [§153.317](https://statutes.capitol.texas.gov/docs/fm/htm/fm.153.htm#153.317)) |
 |---------|----------------|---------------------------|
 | Thursday | 6pm → 8pm (evening) | School dismissal → school resumes Fri (overnight) |
 | Weekend | 1st/3rd/5th Fri 6pm → Sun 6pm | Same, starts at school dismissal Fri |
