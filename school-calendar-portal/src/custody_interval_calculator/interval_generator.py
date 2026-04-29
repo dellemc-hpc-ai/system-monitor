@@ -525,14 +525,16 @@ class CustodyIntervalGenerator:
                 # Gap found
                 new_end, new_custodian = extend_through_gap(group_end, d)
                 if new_custodian is None:
-                    # No school in gap — possession of the preceding custodian
-                    # continues through the gap (including weekends) but terminates
-                    # at the last non-school day (d-1). The next standalone day (d)
-                    # starts a fresh group with its own predecessor custodian,
-                    # even if d is consecutive with the gap's last day.
-                    intervals.append(CustodyInterval(group_start, new_end, current_custodian, "noschool_day", priority=6))
-                    group_start = group_end = d
-                    current_custodian = predecessor_custodian(d)
+                    # No school in gap — §153.315(b): possession continues
+                    # uninterrupted. Extend the current group to include d (the next
+                    # standalone day), treating the entire period as one continuous
+                    # possession. Keep SAME custodian.
+                    #
+                    # Example: 10-09 (Dad holiday) → gap 10-10(Sat)10-11(Sun) →
+                    # 10-12 (standalone holiday, Mon). Since no school resumed in
+                    # the gap, Dad's possession continues through 10-12.
+                    group_end = d  # include the next standalone in this group
+                    # current_custodian unchanged — keep SAME custodian
                 else:
                     # School was in session in gap — emit old group, start new one
                     intervals.append(CustodyInterval(group_start, group_end, current_custodian, "noschool_day", priority=6))

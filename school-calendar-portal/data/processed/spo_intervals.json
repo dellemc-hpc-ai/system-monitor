@@ -1,5 +1,5 @@
 {
-  "count": 270,
+  "count": 268,
   "intervals": [
     {
       "start": "2025-08-13",
@@ -987,14 +987,8 @@
     },
     {
       "start": "2026-10-09",
-      "end": "2026-10-11",
-      "custodian": "dad",
-      "reason": "noschool_day"
-    },
-    {
-      "start": "2026-10-12",
       "end": "2026-10-12",
-      "custodian": "mom",
+      "custodian": "dad",
       "reason": "noschool_day"
     },
     {
@@ -1311,14 +1305,8 @@
     },
     {
       "start": "2027-02-12",
-      "end": "2027-02-14",
-      "custodian": "dad",
-      "reason": "noschool_day"
-    },
-    {
-      "start": "2027-02-15",
       "end": "2027-02-15",
-      "custodian": "mom",
+      "custodian": "dad",
       "reason": "noschool_day"
     },
     {
