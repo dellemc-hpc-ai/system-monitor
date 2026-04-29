@@ -617,11 +617,13 @@ class CustodyIntervalGenerator:
             # Both ESPO and SPO: 1st/3rd/5th Friday weekends (per Texas §153.312/153.317)
             # ESPO adds Thursday overnight; SPO may or may not have Thursday per agreement
             if pattern == "1st_3rd_5th_friday":
-                # Thursdays
+                # Thursdays — ESPO has overnight (school dismissal → school resumes Fri);
+                # SPO has a short evening visit (6pm → 8pm) per §153.312(a)(2)
                 for day in range(1, last_day + 1):
                     thursday = date(year, month, day)
                     if thursday.weekday() == 3 and school_start <= thursday <= school_end:
-                        intervals.append(CustodyInterval(thursday, thursday, thursday_parent, "espo_thursday", priority=7))
+                        reason = "espo_thursday" if self.mode == "espo" else "spo_thursday"
+                        intervals.append(CustodyInterval(thursday, thursday, thursday_parent, reason, priority=7))
                 # 1st, 3rd, 5th Friday weekends (Fri → Sun)
                 fridays = []
                 for day in range(1, last_day + 1):
@@ -633,7 +635,8 @@ class CustodyIntervalGenerator:
                         fri = fridays[fri_idx]
                         sat = fri + timedelta(days=1)
                         sun = fri + timedelta(days=2)
-                        intervals.append(CustodyInterval(fri, sun, weekend_parent, "espo_weekend", priority=8))
+                        reason = "espo_weekend" if self.mode == "espo" else "spo_weekend"
+                        intervals.append(CustodyInterval(fri, sun, weekend_parent, reason, priority=8))
 
             # Move to next month
             if month == 12:
