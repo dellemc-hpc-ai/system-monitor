@@ -209,7 +209,7 @@ Summer starts the day after the last school day and ends the day before school r
 
 #### Other Noschool Days
 
-Single-day no-school events (staff development days, holidays not listed above) inherit the custodian from the preceding day via **§153.315(b)** — possession continues uninterrupted across noschool days, so the custodian "flows through" from whatever interval the day before belonged to. Falls back to **Dad** if there is no preceding interval.
+Single-day no-school events (staff development days, holidays not listed above) inherit the custodian from the preceding calendar day via **§153.315(b)** — possession continues uninterrupted across noschool days, so the custodian "flows through" from whatever interval the day before belonged to.
 
 ### Odd/Even Year Determination
 
