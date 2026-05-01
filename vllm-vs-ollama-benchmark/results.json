@@ -1,0 +1,92 @@
+{
+  "generated": "May 1, 2026 22:00",
+  "gpu": "NVIDIA L4 22 GiB",
+  "model_vllm": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+  "model_ollama": "llama3.1:8b Q4_K_M GGUF",
+  "prompt": "Explain the difference between a neural network and a deep learning model in detail.",
+  "max_tokens": 256,
+  "temperature": 0.7,
+  "scenarios": [
+    {
+      "name": "vLLM + TurboQuant",
+      "key": "vllm_turboquant",
+      "gpu_memory_mib": 19900,
+      "phases": {
+        "cold": {
+          "description": "5 runs, /cache/purge before each",
+          "runs": [5150, 5157, 5164, 5174, 5180],
+          "latency_ms": {"mean": 5165, "median": 5164, "stdev": 12, "min": 5150, "max": 5180},
+          "throughput_tok_s": {"mean": 50, "median": 50, "max": 50}
+        },
+        "cached": {
+          "description": "3 runs, immediate repeat, no purge",
+          "runs": [5188, 5195, 5383],
+          "latency_ms": {"mean": 5255, "median": 5195, "stdev": 91, "min": 5188, "max": 5383},
+          "throughput_tok_s": {"mean": 49, "median": 49, "max": 50}
+        },
+        "steady": {
+          "description": "10 runs, back-to-back burst, no purge",
+          "runs": [8377, 10845, 11078, 11114, 11110, 11111, 11111, 11112, 11112, 11116],
+          "latency_ms": {"mean": 10809, "median": 11111, "stdev": 858, "min": 8377, "max": 11116},
+          "throughput_tok_s": {"mean": 24, "median": 23, "max": 31}
+        }
+      },
+      "cache_speedup_pct": -2,
+      "steady_degradation_pct": 109
+    },
+    {
+      "name": "vLLM (fp8, no TurboQuant)",
+      "key": "vllm_no_turbo",
+      "gpu_memory_mib": 20300,
+      "phases": {
+        "cold": {
+          "description": "5 runs, /cache/purge before each",
+          "runs": [10937, 10937, 10937, 10937, 10937],
+          "latency_ms": {"mean": 10937, "median": 10937, "stdev": 0, "min": 10937, "max": 10937},
+          "throughput_tok_s": {"mean": 23, "median": 23, "max": 23}
+        },
+        "cached": {
+          "description": "3 runs, immediate repeat, no purge",
+          "runs": [10937, 10942, 10942],
+          "latency_ms": {"mean": 10940, "median": 10942, "stdev": 2, "min": 10937, "max": 10942},
+          "throughput_tok_s": {"mean": 23, "median": 23, "max": 23}
+        },
+        "steady": {
+          "description": "10 runs, back-to-back burst, no purge",
+          "runs": [10943, 10944, 10942, 10944, 10942, 10943, 10942, 10941, 10983, 15599],
+          "latency_ms": {"mean": 11412, "median": 10943, "stdev": 1471, "min": 10941, "max": 15599},
+          "throughput_tok_s": {"mean": 23, "median": 23, "max": 23}
+        }
+      },
+      "cache_speedup_pct": 0,
+      "steady_degradation_pct": 4
+    },
+    {
+      "name": "Ollama (Q4_K_M GGUF)",
+      "key": "ollama",
+      "gpu_memory_mib": 5454,
+      "phases": {
+        "cold": {
+          "description": "5 runs, no purge API available",
+          "runs": [47498, 51590, 51964, 52617, 52758],
+          "latency_ms": {"mean": 51285, "median": 51964, "stdev": 2170, "min": 47498, "max": 52758},
+          "throughput_tok_s": {"mean": 5, "median": 5, "max": 5}
+        },
+        "cached": {
+          "description": "3 runs, immediate repeat, no purge",
+          "runs": [51189, 52569, 52310],
+          "latency_ms": {"mean": 52023, "median": 52310, "stdev": 707, "min": 51189, "max": 52569},
+          "throughput_tok_s": {"mean": 5, "median": 5, "max": 5}
+        },
+        "steady": {
+          "description": "10 runs, back-to-back burst, no purge",
+          "runs": [51093, 52239, 52443, 52647, 52085, 52052, 52069, 52672, 52402, 52541],
+          "latency_ms": {"mean": 52224, "median": 52221, "stdev": 461, "min": 51093, "max": 52672},
+          "throughput_tok_s": {"mean": 5, "median": 5, "max": 5}
+        }
+      },
+      "cache_speedup_pct": -1,
+      "steady_degradation_pct": 2
+    }
+  ]
+}
