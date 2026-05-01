@@ -3,23 +3,250 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>vLLM vs Ollama Benchmark — Running...</title>
+  <title>vLLM vs Ollama Benchmark</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #0d1117; color: #e6edf3; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-    .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 40px; text-align: center; max-width: 500px; }
-    h1 { font-size: 1.5rem; margin-bottom: 16px; }
-    p { color: #8b949e; line-height: 1.6; }
-    code { background: #21262d; padding: 2px 6px; border-radius: 4px; color: #58a6ff; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #e6edf3; line-height: 1.6; padding: 40px 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    header { margin-bottom: 40px; }
+    h1 { font-size: 2rem; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; }
+    .meta { color: #8b949e; font-size: 0.9rem; }
+    .meta span { margin-right: 20px; }
+    .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 40px; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
+    .card-label { font-size: 0.8rem; color: #8b949e; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+    .card-value { font-size: 1.8rem; font-weight: 700; }
+    .card-sub { font-size: 0.75rem; color: #8b949e; margin-top: 4px; }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
+    @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
+    .chart-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; }
+    .chart-title { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #f0f6fc; }
+    table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 12px; overflow: hidden; }
+    th { background: #1c2128; color: #8b949e; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 16px; text-align: left; border-bottom: 1px solid #30363d; }
+    td { padding: 12px 16px; font-size: 0.9rem; border-bottom: 1px solid #21262d; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #1c2128; }
+    .verdict { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; margin-top: 40px; }
+    .verdict h2 { font-size: 1.1rem; margin-bottom: 12px; }
+    .verdict p { color: #8b949e; margin-bottom: 8px; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; margin-right: 6px; }
+    .tag-fastest { background: #238636; color: #fff; }
+    .tag-slowest { background: #b62324; color: #fff; }
+    .tag-best-mem { background: #1f6feb; color: #fff; }
+    footer { text-align: center; color: #484f58; font-size: 0.8rem; margin-top: 40px; }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Benchmark in progress...</h1>
-    <p>
-      Run the benchmark with:<br><br>
-      <code>python3 benchmark.py</code><br><br>
-      Then refresh this page to see results.
-    </p>
+  <div class="container">
+    <header>
+      <h1>vLLM vs Ollama Benchmark</h1>
+      <div class="meta">
+        <span>Model: Meta-Llama-3.1-8B-Instruct AWQ INT4</span>
+        <span>GPU: NVIDIA L4 22 GiB</span>
+        <span>Updated: May 1, 2026 17:00</span>
+      </div>
+    </header>
+
+    <div class="summary-cards">
+      <div class="card">
+        <div class="card-label">vLLM + TurboQuant</div>
+        <div class="card-value" style="color:#58a6ff" id="card-turbo-lat">--</div>
+        <div class="card-sub" id="card-turbo-sub">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">vLLM (no TurboQuant)</div>
+        <div class="card-value" style="color:#3fb950" id="card-noturbo-lat">--</div>
+        <div class="card-sub" id="card-noturbo-sub">--</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Ollama Q4_K_M</div>
+        <div class="card-value" style="color:#f78166" id="card-ollama-lat">--</div>
+        <div class="card-sub" id="card-ollama-sub">--</div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <div class="chart-title">Mean Latency (ms)</div>
+        <canvas id="latencyChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Throughput (tokens/sec)</div>
+        <canvas id="throughputChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">GPU Memory Usage (MiB)</div>
+        <canvas id="memoryChart"></canvas>
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Latency vs Throughput</div>
+        <canvas id="scatterChart"></canvas>
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Scenario</th><th>Runs</th><th>Errors</th>
+          <th>Latency Mean ± σ</th><th>Median</th><th>P95</th><th>P99</th><th>Min</th><th>Max</th>
+          <th>Throughput Mean</th><th>Throughput Max</th><th>GPU Mem (MiB)</th>
+        </tr>
+      </thead>
+      <tbody id="table-body"></tbody>
+    </table>
+
+    <div class="verdict">
+      <h2>Analysis</h2>
+      <div id="verdict-content"></div>
+    </div>
+
+    <footer>Benchmark tool · vLLM 0.20.0 · Ollama · NVIDIA L4</footer>
   </div>
+
+  <script>
+    // Benchmark data
+    var scenarios = [
+      {
+        name: "vLLM + TurboQuant", key: "vllm_turboquant",
+        color: "#58a6ff",
+        runs: 10, errors: 0,
+        latency_ms: { mean: 15312.4, median: 11555.1, stdev: 5306.2, min: 11134.3, max: 22395.2, p95: 22395.2, p99: 22395.2 },
+        throughput_tokens_per_sec: { mean: 18.6, median: 21.6, max: 23.8 },
+        gpu_memory_mib: { before: 19876, after: 19878 }
+      },
+      {
+        name: "vLLM (no TurboQuant)", key: "vllm_no_turbo",
+        color: "#3fb950",
+        runs: 10, errors: 0,
+        latency_ms: { mean: 23280.0, median: 21923.0, stdev: 8085.0, min: 10946.0, max: 33921.0, p95: 33638.0, p99: 33921.0 },
+        throughput_tokens_per_sec: { mean: 13.0, median: 12.0, max: 23.0 },
+        gpu_memory_mib: { before: 20276, after: 20278 }
+      },
+      {
+        name: "Ollama (Q4_K_M)", key: "ollama",
+        color: "#f78166",
+        runs: 10, errors: 0,
+        latency_ms: { mean: 10931.0, median: 14023.0, stdev: 3755.0, min: 5383.0, max: 14057.0, p95: 14057.0, p99: 14057.0 },
+        throughput_tokens_per_sec: { mean: 28.0, median: 20.0, max: 49.0 },
+        gpu_memory_mib: { before: 5452, after: 5452 }
+      }
+    ];
+
+    var labels = scenarios.map(function(s) { return s.name; });
+    var latencyData = scenarios.map(function(s) { return Math.round(s.latency_ms.mean); });
+    var throughputData = scenarios.map(function(s) { return Math.round(s.throughput_tokens_per_sec.mean); });
+    var memoryData = scenarios.map(function(s) { return s.gpu_memory_mib.after; });
+    var colors = scenarios.map(function(s) { return s.color; });
+
+    // Fill summary cards
+    document.getElementById("card-turbo-lat").textContent = Math.round(scenarios[0].latency_ms.mean) + "ms";
+    document.getElementById("card-turbo-sub").textContent = Math.round(scenarios[0].throughput_tokens_per_sec.mean) + " tok/s  ·  " + scenarios[0].gpu_memory_mib.after + " MiB";
+    document.getElementById("card-noturbo-lat").textContent = Math.round(scenarios[1].latency_ms.mean) + "ms";
+    document.getElementById("card-noturbo-sub").textContent = Math.round(scenarios[1].throughput_tokens_per_sec.mean) + " tok/s  ·  " + scenarios[1].gpu_memory_mib.after + " MiB";
+    document.getElementById("card-ollama-lat").textContent = Math.round(scenarios[2].latency_ms.mean) + "ms";
+    document.getElementById("card-ollama-sub").textContent = Math.round(scenarios[2].throughput_tokens_per_sec.mean) + " tok/s  ·  " + scenarios[2].gpu_memory_mib.after + " MiB";
+
+    // Fill table
+    var tbody = document.getElementById("table-body");
+    scenarios.forEach(function(s) {
+      var tr = document.createElement("tr");
+      tr.innerHTML = [
+        "<td style=\"color:" + s.color + ";font-weight:600\">" + s.name + "</td>",
+        "<td>" + s.runs + "</td>",
+        "<td>" + s.errors + "</td>",
+        "<td>" + s.latency_ms.mean.toFixed(0) + " ± " + s.latency_ms.stdev.toFixed(0) + "</td>",
+        "<td>" + s.latency_ms.median.toFixed(0) + "</td>",
+        "<td>" + s.latency_ms.p95.toFixed(0) + "</td>",
+        "<td>" + s.latency_ms.p99.toFixed(0) + "</td>",
+        "<td>" + s.latency_ms.min.toFixed(0) + "</td>",
+        "<td>" + s.latency_ms.max.toFixed(0) + "</td>",
+        "<td>" + s.throughput_tokens_per_sec.mean.toFixed(0) + "</td>",
+        "<td>" + s.throughput_tokens_per_sec.max.toFixed(0) + "</td>",
+        "<td>" + s.gpu_memory_mib.after + "</td>"
+      ].join("");
+      tbody.appendChild(tr);
+    });
+
+    // Charts
+    var chartDefaults = {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: "#8b949e" }, grid: { color: "#21262d" } },
+        y: { ticks: { color: "#8b949e" }, grid: { color: "#21262d" } }
+      }
+    };
+
+    new Chart(document.getElementById("latencyChart"), {
+      type: "bar",
+      data: { labels: labels, datasets: [{ data: latencyData, backgroundColor: colors, borderRadius: 6 }] },
+      options: Object.assign({}, chartDefaults, {
+        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + " ms"; } } } }
+      })
+    });
+
+    new Chart(document.getElementById("throughputChart"), {
+      type: "bar",
+      data: { labels: labels, datasets: [{ data: throughputData, backgroundColor: colors, borderRadius: 6 }] },
+      options: Object.assign({}, chartDefaults, {
+        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + " tok/s"; } } } }
+      })
+    });
+
+    new Chart(document.getElementById("memoryChart"), {
+      type: "bar",
+      data: { labels: labels, datasets: [{ data: memoryData, backgroundColor: colors, borderRadius: 6 }] },
+      options: Object.assign({}, chartDefaults, {
+        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + " MiB"; } } } },
+        scales: { y: { min: 0 } }
+      })
+    });
+
+    // Latency vs Throughput scatter
+    new Chart(document.getElementById("scatterChart"), {
+      type: "scatter",
+      data: {
+        datasets: scenarios.map(function(s) {
+          return {
+            label: s.name,
+            data: [{ x: s.latency_ms.mean, y: s.throughput_tokens_per_sec.mean }],
+            backgroundColor: s.color,
+            pointRadius: 10,
+            pointHoverRadius: 12
+          };
+        })
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { display: true, labels: { color: "#8b949e" } } },
+        scales: {
+          x: { title: { display: true, text: "Latency (ms)", color: "#8b949e" }, ticks: { color: "#8b949e" }, grid: { color: "#21262d" } },
+          y: { title: { display: true, text: "Throughput (tok/s)", color: "#8b949e" }, ticks: { color: "#8b949e" }, grid: { color: "#21262d" } }
+        }
+      }
+    });
+
+    // Verdict
+    var fastest = scenarios.reduce(function(a, b) { return a.latency_ms.mean < b.latency_ms.mean ? a : b; });
+    var slowest = scenarios.reduce(function(a, b) { return a.latency_ms.mean > b.latency_ms.mean ? a : b; });
+    var bestTput = scenarios.reduce(function(a, b) { return a.throughput_tokens_per_sec.mean > b.throughput_tokens_per_sec.mean ? a : b; });
+    var turbo = scenarios[0];
+    var noTurbo = scenarios[1];
+
+    var verdictHTML = "<p><span class=\"tag tag-fastest\">FASTEST</span> " + fastest.name + " at " + fastest.latency_ms.mean.toFixed(0) + " ms mean latency</p>";
+    verdictHTML += "<p><span class=\"tag tag-slowest\">SLOWEST</span> " + slowest.name + " at " + slowest.latency_ms.mean.toFixed(0) + " ms mean latency</p>";
+    verdictHTML += "<p><span class=\"tag tag-best-mem\">BEST THROUGHPUT</span> " + bestTput.name + " at " + bestTput.throughput_tokens_per_sec.mean.toFixed(0) + " tok/s</p>";
+
+    var speedup = ((noTurbo.latency_ms.mean - turbo.latency_ms.mean) / noTurbo.latency_ms.mean * 100).toFixed(1);
+    if (speedup > 0) {
+      verdictHTML += "<p style=\"margin-top:12px\">TurboQuant speeds up by " + speedup + "% vs no TurboQuant (from " + noTurbo.latency_ms.mean.toFixed(0) + "ms to " + turbo.latency_ms.mean.toFixed(0) + "ms).</p>";
+    } else {
+      verdictHTML += "<p style=\"margin-top:12px\">TurboQuant slows down by " + Math.abs(speedup) + "% vs no TurboQuant (from " + noTurbo.latency_ms.mean.toFixed(0) + "ms to " + turbo.latency_ms.mean.toFixed(0) + "ms).</p>";
+    }
+    verdictHTML += "<p style=\"margin-top:8px\">Ollama uses " + (100 - Math.round(5452/20278*100)) + "% less GPU memory (" + scenarios[2].gpu_memory_mib.after + " MiB vs " + scenarios[1].gpu_memory_mib.after + " MiB) but delivers " + Math.round(scenarios[2].throughput_tokens_per_sec.mean/scenarios[1].throughput_tokens_per_sec.mean*100-100) + "% higher throughput.</p>";
+
+    document.getElementById("verdict-content").innerHTML = verdictHTML;
+  </script>
 </body>
 </html>

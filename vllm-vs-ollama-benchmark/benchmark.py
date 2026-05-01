@@ -566,7 +566,7 @@ def start_vllm_no_turbo():
         "--gpu-memory-utilization", "0.90",
         "--kv-cache-dtype", "fp8",
         "--trust-remote-code",
-        "--enforce-eager",
+        "--enforce-eager"
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
