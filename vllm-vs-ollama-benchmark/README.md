@@ -1,16 +1,98 @@
 # vLLM vs Ollama Benchmark
 
-**GPU:** NVIDIA L4 22 GiB | **Models:** Meta-Llama-3.1-8B-Instruct (AWQ INT4 for vLLM, Q4_K_M GGUF for Ollama) **AND** Qwen2.5-0.5B-Instruct (same GGUF file for both engines — fair comparison)
+**GPU:** NVIDIA L4 22 GiB
 
-## Results Summary
+---
 
-| Scenario | GPU Memory | Cold Start | Cache Hit | Steady-State | Cache Speedup |
-|---|---|---|---|---|---|
-| **vLLM + TurboQuant** | 19.9 GB | 5,165 ms / 50 tok/s | 5,255 ms / 49 tok/s | 10,809 ms / 24 tok/s | -2% (none) |
-| **vLLM (fp8, no TurboQuant)** | 20.3 GB | 10,937 ms / 23 tok/s | 10,940 ms / 23 tok/s | 11,412 ms / 23 tok/s | 0% (none) |
-| **Ollama (Q4_K_M GGUF)** | 5.5 GB | 51,285 ms / 5 tok/s | 52,023 ms / 5 tok/s | 52,224 ms / 5 tok/s | -1.4% (none) |
+## Test History
 
-> Cache Speedup = (Cold − Cache) / Cold × 100%. Positive = cache helps. Zero = cache not helping.
+| Date | Test | Models Compared | Fair? |
+|---|---|---|---|
+| 2026-05-02 | [Qwen2.5-0.5B Fair Comparison](#test-3-qwen25-05b-same-gguf-both-engines) | Qwen2.5-0.5B Q4_K_M GGUF (identical file) | ✅ Yes |
+| 2026-05-01 | [3-Phase: Llama 3.1 8B + TurboQuant](#test-1--2--3-llama-31-8b-3-phase) | Llama 3.1 8B (AWQ INT4 vs Q4_K_M GGUF) | ❌ Different formats |
+| 2026-04-27 | [Single-phase: Llama 3.1 8B](#test-0-llama-31-8b-single-phase) | Llama 3.1 8B (AWQ INT4 vs Q4_K_M GGUF) | ❌ Different formats |
+
+---
+
+## Test 3: Qwen2.5-0.5B — Same GGUF, Both Engines ✅
+
+> **This is the only fair comparison.** Both engines load the **exact same Q4_K_M GGUF file** from disk.
+
+**Setup:** Downloaded `Qwen/Qwen2.5-0.5B-Instruct-GGUF` Q4_K_M → `/tmp/qwen_gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf` (469 MB). vLLM via `--load-format gguf` port 8001; Ollama imported as `qwen2.5:0.5b-q4_k_m` port 11434.
+
+**Conditions:** `max_tokens=100`, `temperature=0.7`, same prompt on both engines.
+
+### Results
+
+| Metric | vLLM GGUF | Ollama GGUF |
+|---|---|---|
+| **GPU Memory** | 6.9 GB | 5.5 GB |
+| Cold start (ms) | 501 | 1,079 (Run 1 = 3,867ms) |
+| Cache hit (ms) | 496 | 425 |
+| Steady-state (ms) | 496 | 448 |
+| Cold throughput | 199,650 tok/s | 214,740 tok/s |
+| Steady throughput | 201,731 tok/s | 223,865 tok/s |
+
+### Raw Logs
+- `logs/bench_3phase_qwen05_fair_comparison_2026-05-02.json`
+
+### Observations
+- Ollama is ~10% faster in steady-state (223K vs 201K tok/s)
+- vLLM has zero variance across phases (stable at 496ms)
+- Ollama Run 1 = 3,867ms (model first-init overhead), subsequent runs ~380ms
+- **0.5B saturates L4 bandwidth easily — results may not reflect 8B+ behavior**
+
+---
+
+## Test 1 & 2 & 3: Llama 3.1 8B — 3-Phase
+
+> ⚠️ **Caveat:** vLLM uses AWQ INT4 (safetensors), Ollama uses Q4_K_M GGUF. These are **different quantizations and formats** — engine performance comparisons are unreliable. Treat these as "what you'd get in practice with each engine's recommended setup."
+
+**Prompt:** "Explain the difference between a neural network and a deep learning model in detail." | `max_tokens=256` | `temperature=0.7`
+
+### Results Summary
+
+| Scenario | GPU Memory | Cold Start | Cache Hit | Steady-State | Cache Speedup | Steady Degradation |
+|---|---|---|---|---|---|---|
+| **vLLM + TurboQuant** | 19.9 GB | 5,165 ms / 50 tok/s | 5,255 ms / 49 tok/s | 10,809 ms / 24 tok/s | -2% (none) | +109% |
+| **vLLM (fp8, no TurboQuant)** | 20.3 GB | 10,937 ms / 23 tok/s | 10,940 ms / 23 tok/s | 11,412 ms / 23 tok/s | 0% (none) | +4% |
+| **Ollama (Q4_K_M GGUF)** | 5.5 GB | 51,285 ms / 5 tok/s | 52,023 ms / 5 tok/s | 52,224 ms / 5 tok/s | -1% (none) | +2% |
+
+### Raw Logs
+- `logs/bench_3phase_vllm_turboquant_2026-05-01.json`
+- `logs/bench_3phase_vllm_no_turbo_2026-05-01.json`
+- `logs/bench_3phase_ollama_2026-05-01.json`
+
+### Key Findings (8B)
+
+1. **TurboQuant is ~2x faster than fp8 in cold-start** — 5.2s vs 10.9s for 256-token generation. KV cache compression (2.5x ratio) reduces memory bandwidth pressure.
+
+2. **KV cache provides zero speedup for short prompts** — Cold vs Cache Hit phases are identical (~5,165ms vs ~5,255ms). With ~35-token prompts, KV overhead is negligible vs 256-token generation.
+
+3. **TurboQuant degrades sharply under burst (steady-state)** — 109% slowdown (5.2s → 10.8s). Aggressive KV compression leaves no margin; cache eviction forces recomputation.
+
+4. **fp8 is stable under burst** — 10.9s cold, 11.4s steady (4% degradation). Larger KV entries are more predictable.
+
+5. **Ollama is stable but 5x slower than TurboQuant** — 51-52s across all phases. 73% lower memory (5.5GB) is its main advantage.
+
+---
+
+## Test 0: Llama 3.1 8B — Single-Phase (Earlier)
+
+> Same caveat as Tests 1-3: different model formats per engine.
+
+| Scenario | Memory | Latency | Throughput |
+|---|---|---|---|
+| vLLM TurboQuant | — | ~16s | ~16 tok/s |
+| vLLM (fp8) | — | ~34s | ~7 tok/s |
+| Ollama Q4_K_M | 5.5 GB | ~50s | ~5 tok/s |
+
+**Raw Logs:**
+- `logs/bench_vllm_turboquant_2026-04-27.json`
+- `logs/bench_vllm_no_turbo_2026-04-27.json`
+- `logs/bench_ollama_2026-04-27.json`
+
+---
 
 ## Methodology
 
@@ -26,9 +108,6 @@ Each scenario is tested in 3 distinct cache states:
 
 - **Warmup:** 1 request before Phase 1
 - **Runs per phase:** Cold=5, Cache=3, Steady=10
-- **Prompt:** "Explain the difference between a neural network and a deep learning model in detail."
-- **max_tokens:** 256
-- **temperature:** 0.7
 - **vLLM:** `vllm/vllm-openai:latest`, `--max-model-len 131072`, `--gpu-memory-utilization 0.90`
 - **Ollama:** `llama3.1:8b` Q4_K_M (GGUF), running as background service
 
@@ -39,52 +118,14 @@ Previous benchmarks ran requests back-to-back without purging cache. This mixes 
 - **Old mixed benchmark:** "Mean latency 16,000 ms" — is this cold? cached? steady-state?
 - **3-phase benchmark:** "Cold 5,165ms, Cache 5,255ms, Steady 10,809ms" — each number means something specific.
 
-## Fair Comparison: Same Model (Qwen2.5-0.5B Q4_K_M GGUF)
+### Cache speedup formula
 
-> ⚠️ **Important caveat:** The Llama 3.1 8B results above compare *different model formats* (AWQ INT4 vs GGUF Q4_K_M), making direct engine performance comparisons unreliable. The following test uses the **exact same GGUF file** loaded by both engines.
+```
+Cache Speedup % = (Cold − Cache) / Cold × 100%
+```
+Positive = cache helps. Zero = cache not helping for this workload.
 
-**Setup:** Downloaded `Qwen/Qwen2.5-0.5B-Instruct-GGUF` Q4_K_M to `/tmp/qwen_gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf` (469 MB). vLLM loaded it via `--load-format gguf` on port 8001; Ollama imported it as `qwen2.5:0.5b-q4_k_m` on port 11434.
-
-|| Metric | vLLM GGUF | Ollama GGUF |
-||---|---|---|
-|| **GPU Memory** | 6.9 GB | 5.5 GB |
-|| **Cold start latency** | 501 ms | 1,079 ms (Run 1 = 3,867ms) |
-|| **Cached latency** | 496 ms | 425 ms |
-|| **Steady-state latency** | 496 ms | 448 ms |
-|| **Cold throughput** | 199,650 tok/s | 214,740 tok/s |
-|| **Steady throughput** | 201,731 tok/s | 223,865 tok/s |
-
-**Key observations:**
-- Ollama is ~10% faster in steady-state (223K vs 201K tok/s) for this small model
-- vLLM has consistent latency across all phases (no cache benefit, no degradation)
-- Ollama's first-ever request takes 3.9s (model initialization), but subsequent requests are ~380ms
-- **This 0.5B model saturates L4 bandwidth easily — results may not reflect behavior at 8B+ scale**
-
-## Key Findings
-
-### 1. TurboQuant is ~2x faster than fp8 in cold-start inference
-
-vLLM + TurboQuant processes the same 256-token generation in **5.2s** (50 tok/s) vs fp8's **10.9s** (23 tok/s). This 112% speedup comes from the 2.5x KV cache compression ratio — more cache slots fit in 20GB, reducing memory bandwidth pressure during the matrix multiplications.
-
-### 2. KV cache provides zero speedup for identical prompts
-
-Cold and Cache Hit phases are nearly identical (5,165ms vs 5,255ms for TurboQuant, 10,937ms vs 10,940ms for fp8). This is because the **prompt is short** (~35 tokens). The KV for a 35-token prompt is negligible compared to the 256-token generation — the compute is dominated by token generation, not prompt processing.
-
-> **Cache helps when:** Long system prompts are reused (RAG, multi-turn conversations). **Cache doesn't help when:** The bottleneck is generation, not prefill.
-
-### 3. TurboQuant degrades sharply under burst load (steady-state)
-
-TurboQuant's cold start is fast (5.2s) but degrades to **10.8s** under a 10-request burst — a 109% slowdown. This is because TurboQuant's aggressive compression leaves less margin; once the KV cache fills, eviction forces recomputation that hits the GPU memory bus hard.
-
-fp8 is remarkably stable — **10.9s in cold, 10.9s in steady-state** (0% degradation, or 4% counting one outlier). The fp8 KV entries are larger but more predictable; vLLM's cache eviction policy handles them without the severe performance cliff TurboQuant hits.
-
-### 4. Ollama is stable under burst but 5x slower than vLLM TurboQuant
-
-Ollama shows **0% steady-state degradation** (51-52s across all phases) — the most stable of all three engines. But it's 5x slower than TurboQuant cold-start (51s vs 5s). Its 73% lower memory footprint (5.5GB) is its main advantage — on a larger GPU it could run alongside other workloads.
-
-### 5. `--enforce-eager` causes severe performance degradation
-
-Earlier tests with `--enforce-eager` flag showed 79s first-token latency and 34s+ steady-state for fp8. Without it (pipeline parallelism enabled), fp8 runs at consistent 10.9s across all phases. **Never use `--enforce-eager` on L4 22GB for 8B models unless you have a specific reason.**
+---
 
 ## Recommendations
 
@@ -96,6 +137,8 @@ Earlier tests with `--enforce-eager` flag showed 79s first-token latency and 34s
 | **RAG with long system prompts** | vLLM + TurboQuant — cache shines with long prompts |
 | **Long multi-turn conversations** | vLLM fp8 — TurboQuant's 109% steady-state cliff is risky |
 
+---
+
 ## Verdict Summary
 
 | | vLLM + TurboQuant | vLLM fp8 | Ollama Q4_K_M |
@@ -105,6 +148,8 @@ Earlier tests with `--enforce-eager` flag showed 79s first-token latency and 34s
 | **Steady-state stability** | ❌ 109% slower | ✅ 4% slower | ✅ 2% slower (most stable) |
 | **Memory usage** | ⚠️ 19.9 GB | ⚠️ 20.3 GB | ✅ 5.5 GB (73% less) |
 | **Best for** | Single-user, bursty | Multi-user, sustained | Memory-constrained |
+
+---
 
 ## Running the Benchmark
 
@@ -118,9 +163,11 @@ python3 /tmp/run_3phase.py 8000 vllm_no_turbo     # vLLM fp8
 python3 /tmp/run_3phase.py 11434 ollama           # Ollama
 ```
 
+---
+
 ## Files
 
 - `benchmark.py` — Full 3-phase benchmark orchestrator
-- `/tmp/run_3phase.py` — Standalone runner (used for actual measurements)
 - `index.html` — Interactive visual report
-- `results.json` — Raw JSON data
+- `results.json` — Aggregated results (all tests)
+- `logs/` — Raw per-test JSON logs with timestamps

@@ -3,117 +3,250 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>vLLM vs Ollama — 3-Phase Benchmark</title>
+  <title>vLLM vs Ollama — Benchmark Suite</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0d1117; color: #e6edf3; line-height: 1.6; padding: 40px 20px; }
-    .container { max-width: 1300px; margin: 0 auto; }
+    .container { max-width: 1400px; margin: 0 auto; }
     header { margin-bottom: 40px; }
     h1 { font-size: 2rem; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; }
     .meta { color: #8b949e; font-size: 0.9rem; }
     .meta span { margin-right: 20px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin-right: 6px; }
+    .badge-fair { background: #238636; color: #fff; }
+    .badge-caveat { background: #b62324; color: #fff; }
+    .badge-old { background: #484f58; color: #fff; }
+
+    /* Test selector */
+    .test-nav { display: flex; gap: 12px; margin-bottom: 32px; flex-wrap: wrap; }
+    .test-btn { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; color: #8b949e; cursor: pointer; font-size: 0.85rem; transition: all 0.2s; }
+    .test-btn:hover { border-color: #58a6ff; color: #e6edf3; }
+    .test-btn.active { border-color: #58a6ff; color: #58a6ff; background: #1c2128; }
+
+    /* Sections */
+    .test-section { display: none; }
+    .test-section.active { display: block; }
+
     .phase-legend { display: flex; gap: 24px; margin-bottom: 32px; font-size: 0.85rem; }
     .phase-legend span { display: flex; align-items: center; gap: 6px; }
     .phase-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
     .dot-cold { background: #f97583; } .dot-cached { background: #85e89d; } .dot-steady { background: #79c0ff; }
+
     .summary-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 40px; }
     .card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 20px; }
     .card-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
     .card-value { font-size: 2rem; font-weight: 700; }
     .card-sub { font-size: 0.75rem; color: #8b949e; margin-top: 4px; }
+
     .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px; }
     @media (max-width: 768px) { .chart-grid { grid-template-columns: 1fr; } }
     .chart-card { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; }
     .chart-title { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: #f0f6fc; }
+
     table { width: 100%; border-collapse: collapse; background: #161b22; border-radius: 12px; overflow: hidden; margin-bottom: 40px; }
     th { background: #1c2128; color: #8b949e; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 14px; text-align: left; border-bottom: 1px solid #30363d; }
     td { padding: 10px 14px; font-size: 0.85rem; border-bottom: 1px solid #21262d; }
     tr:last-child td { border-bottom: none; } tr:hover td { background: #1c2128; }
+
     .verdict { background: #161b22; border: 1px solid #30363d; border-radius: 12px; padding: 24px; margin-top: 40px; }
     .verdict h2 { font-size: 1.1rem; margin-bottom: 12px; }
-    .verdict p { color: #8b949e; margin-bottom: 8px; } .verdict strong { color: #e6edf3; }
-    .verdict ul { color: #8b949e; margin: 8px 0 8px 20px; } .verdict li { margin-bottom: 6px; }
+    .verdict p { color: #8b949e; margin-bottom: 8px; }
+    .verdict strong { color: #e6edf3; }
+    .verdict ul { color: #8b949e; margin: 8px 0 8px 20px; }
+    .verdict li { margin-bottom: 6px; }
     .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; margin-right: 6px; }
-    .tag-fastest { background: #238636; color: #fff; } .tag-slowest { background: #b62324; color: #fff; }
-    .tag-best-mem { background: #1f6feb; color: #fff; } .tag-cache-hit { background: #a371f7; color: #fff; }
+    .tag-fastest { background: #238636; color: #fff; }
+    .tag-slowest { background: #b62324; color: #fff; }
+    .tag-best-mem { background: #1f6feb; color: #fff; }
+    .tag-cache-hit { background: #a371f7; color: #fff; }
+    .tag-stable { background: #238636; color: #fff; }
+
     .note { background: #1c2128; border-left: 3px solid #f97583; padding: 12px 16px; margin: 16px 0; color: #8b949e; font-size: 0.85rem; }
+    .note.fair { border-color: #238636; }
     .insight { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
     .insight h3 { font-size: 0.95rem; margin-bottom: 8px; color: #f0f6fc; }
+
+    /* History table */
+    .history-table { margin-bottom: 40px; }
+    .history-table table { font-size: 0.8rem; }
+    .log-link { color: #58a6ff; text-decoration: none; }
+    .log-link:hover { text-decoration: underline; }
+
     footer { text-align: center; color: #484f58; font-size: 0.8rem; margin-top: 40px; }
+
+    /* Section divider */
+    .section-header { display: flex; align-items: center; gap: 12px; margin: 48px 0 24px; }
+    .section-header h2 { font-size: 1.3rem; color: #f0f6fc; }
+    .section-header .line { flex: 1; height: 1px; background: #30363d; }
   </style>
 </head>
 <body>
   <div class="container">
     <header>
-      <h1>vLLM vs Ollama — 3-Phase Benchmark</h1>
+      <h1>vLLM vs Ollama — Benchmark Suite</h1>
       <div class="meta">
-        <span>Model: Meta-Llama-3.1-8B-Instruct (AWQ INT4 for vLLM, Q4_K_M GGUF for Ollama)</span>
         <span>GPU: NVIDIA L4 22 GiB</span>
-        <span>Updated: May 1, 2026 22:00</span>
+        <span>Updated: May 2, 2026</span>
       </div>
-      <div class="phase-legend">
-        <span><span class="phase-dot dot-cold"></span>Cold Start — /cache/purge before each run</span>
-        <span><span class="phase-dot dot-cached"></span>Cache Hit — immediate repeat, same prompt</span>
-        <span><span class="phase-dot dot-steady"></span>Steady-State — 10-request burst, no purge</span>
+
+      <!-- Test selector -->
+      <div class="test-nav">
+        <button class="test-btn active" onclick="showTest('fair')">
+          ★ Test 3: Qwen 0.5B Fair
+        </button>
+        <button class="test-btn" onclick="showTest('llama8b')">
+          Tests 1-2: Llama 3.1 8B 3-Phase
+        </button>
+        <button class="test-btn" onclick="showTest('single')">
+          Test 0: Llama 3.1 8B Single-Phase
+        </button>
+        <button class="test-btn" onclick="showTest('history')">
+          All Tests / History
+        </button>
       </div>
     </header>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
-      <div class="card">
-        <div class="card-label" style="color:#58a6ff">vLLM + TurboQuant</div>
-        <div class="card-value" style="color:#58a6ff">5,165<span style="font-size:1rem;font-weight:400">ms</span></div>
-        <div class="card-sub">Cold: 5,165ms / 50 tok/s &nbsp;|&nbsp; Steady: 10,809ms / 24 tok/s</div>
-        <div class="card-sub">GPU: 19,900 MiB &nbsp;|&nbsp; 109% slower under burst</div>
-      </div>
-      <div class="card">
-        <div class="card-label" style="color:#3fb950">vLLM (fp8, no TurboQuant)</div>
-        <div class="card-value" style="color:#3fb950">10,937<span style="font-size:1rem;font-weight:400">ms</span></div>
-        <div class="card-sub">Cold: 10,937ms / 23 tok/s &nbsp;|&nbsp; Steady: 11,412ms / 23 tok/s</div>
-        <div class="card-sub">GPU: 20,300 MiB &nbsp;|&nbsp; 4% slower under burst (stable)</div>
-      </div>
-      <div class="card">
-        <div class="card-label" style="color:#f78166">Ollama (Q4_K_M)</div>
-        <div class="card-value" style="color:#f78166">51,285<span style="font-size:1rem;font-weight:400">ms</span></div>
-        <div class="card-sub">Cold: 51,285ms / 5 tok/s &nbsp;|&nbsp; Steady: 52,224ms / 5 tok/s</div>
-        <div class="card-sub">GPU: 5,454 MiB &nbsp;|&nbsp; 1.8% slower under burst (stable)</div>
-      </div>
-    </div>
+    <!-- ============================================================
+         TEST 3: QWEN 0.5B FAIR COMPARISON
+    ============================================================ -->
+    <div id="test-fair" class="test-section active">
 
-    <!-- Key Insights -->
-    <div class="insight">
-      <h3>Key Finding: Cache provides zero speedup — prompt is too short</h3>
-      <p>Cache Hit and Cold Start are nearly identical for both vLLM configs. The 35-token prompt KV is negligible compared to the 256-token generation. <strong>Cache shines when system prompts are long (RAG, multi-turn) — here it doesn't matter.</strong></p>
-    </div>
-    <div class="insight">
-      <h3>Key Finding: TurboQuant has a steep steady-state cliff — 109% slower under burst</h3>
-      <p>TurboQuant starts fast (5.2s) but degrades to 10.8s under burst. fp8 is stable at 10.9s across all phases. For multi-user production servers, fp8 is the safer choice.</p>
-    </div>
+      <div class="note fair">
+        <strong>✓ Only fair comparison in this suite.</strong> Both engines load the <strong>exact same Q4_K_M GGUF file</strong> — identical weights, identical quantization. Engine performance differences are meaningful here.
+      </div>
 
-    <!-- Charts -->
-    <div class="chart-grid">
-      <div class="chart-card"><div class="chart-title">Latency by Phase (ms, lower=better)</div><canvas id="latencyChart"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Throughput by Phase (tok/s, higher=better)</div><canvas id="throughputChart"></canvas></div>
-      <div class="chart-card"><div class="chart-title">GPU Memory (MiB)</div><canvas id="memoryChart"></canvas></div>
-      <div class="chart-card"><div class="chart-title">Steady-State Degradation vs Cold (%)</div><canvas id="degradationChart"></canvas></div>
-    </div>
+      <div class="phase-legend">
+        <span><span class="phase-dot dot-cold"></span>Cold — purged before each run</span>
+        <span><span class="phase-dot dot-cached"></span>Cached — immediate repeat, same prompt</span>
+        <span><span class="phase-dot dot-steady"></span>Steady — 10-request burst, no purge</span>
+      </div>
 
-    <!-- Phase Comparison Table -->
-    <div style="margin-bottom:40px">
-      <h2 style="font-size:1.2rem;margin-bottom:16px;color:#f0f6fc">Phase-by-Phase Results</h2>
+      <div class="summary-cards">
+        <div class="card">
+          <div class="card-label" style="color:#58a6ff">vLLM GGUF</div>
+          <div class="card-value" style="color:#58a6ff">496<span style="font-size:1rem;font-weight:400">ms</span></div>
+          <div class="card-sub">Steady: 496ms / 201,731 tok/s</div>
+          <div class="card-sub">GPU: 6,879 MiB · Zero variance across phases</div>
+        </div>
+        <div class="card">
+          <div class="card-label" style="color:#3fb950">Ollama GGUF</div>
+          <div class="card-value" style="color:#3fb950">448<span style="font-size:1rem;font-weight:400">ms</span></div>
+          <div class="card-sub">Steady: 448ms / 223,865 tok/s</div>
+          <div class="card-sub">GPU: 5,454 MiB · First request = 3,867ms (init)</div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card"><div class="chart-title">Latency by Phase (ms, lower=better)</div><canvas id="fair-latency"></canvas></div>
+        <div class="chart-card"><div class="chart-title">Throughput by Phase (tok/s, higher=better)</div><canvas id="fair-throughput"></canvas></div>
+        <div class="chart-card"><div class="chart-title">GPU Memory (MiB)</div><canvas id="fair-memory"></canvas></div>
+        <div class="chart-card"><div class="chart-title">Per-Run Latency (ms) — vLLM vs Ollama</div><canvas id="fair-runs"></canvas></div>
+      </div>
+
       <table>
         <thead>
-          <tr>
-            <th>Phase</th>
-            <th style="color:#58a6ff">vLLM + TurboQuant</th>
-            <th style="color:#3fb950">vLLM (fp8)</th>
-            <th style="color:#f78166">Ollama Q4_K_M</th>
-          </tr>
+          <tr><th>Phase</th><th style="color:#58a6ff">vLLM GGUF</th><th style="color:#3fb950">Ollama GGUF</th><th>Winner</th></tr>
         </thead>
         <tbody>
           <tr>
-            <td><strong>Cold Start</strong><br><span style="font-size:0.7rem;color:#8b949e">5 runs, no purge (Ollama)</span></td>
+            <td><strong>Cold Start</strong><br><span style="font-size:0.7rem;color:#8b949e">5 runs, /cache/purge before each</span></td>
+            <td><span style="color:#58a6ff">501ms ± 4.5</span><br>199,650 tok/s</td>
+            <td><span style="color:#3fb950">1,079ms ± 1,558</span><br>214,740 tok/s<br><span style="font-size:0.7rem;color:#f97583">Run 1=3,867ms</span></td>
+            <td>vLLM by cold Run 1</td>
+          </tr>
+          <tr>
+            <td><strong>Cache Hit</strong><br><span style="font-size:0.7rem;color:#8b949e">3 runs, immediate repeat</span></td>
+            <td><span style="color:#58a6ff">496ms ± 1.9</span><br>201,427 tok/s</td>
+            <td><span style="color:#3fb950">425ms ± 10</span><br>235,597 tok/s</td>
+            <td>Ollama +14%</td>
+          </tr>
+          <tr>
+            <td><strong>Steady-State</strong><br><span style="font-size:0.7rem;color:#8b949e">10 runs, burst, no purge</span></td>
+            <td><span style="color:#58a6ff">496ms ± 3.7</span><br>201,731 tok/s</td>
+            <td><span style="color:#3fb950">448ms ± 21</span><br>223,865 tok/s</td>
+            <td>Ollama +10%</td>
+          </tr>
+          <tr>
+            <td><strong>Cache Speedup</strong></td>
+            <td style="color:#8b949e">-1% (none)</td>
+            <td style="color:#a371f7">+61% (Run 1 excluded)</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td><strong>Steady Degradation</strong></td>
+            <td style="color:#3fb950">0%</td>
+            <td style="color:#8b949e">+2%</td>
+            <td>Tie (both stable)</td>
+          </tr>
+          <tr>
+            <td><strong>GPU Memory</strong></td>
+            <td>6,879 MiB</td>
+            <td>5,454 MiB</td>
+            <td>Ollama -21%</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="verdict">
+        <h2>Fair Comparison Key Findings (Qwen 0.5B)</h2>
+        <p><span class="tag tag-best-mem">MISMATCHED SCALE</span>This 0.5B model is far too small to stress L4. Both engines saturate bandwidth easily — Ollama appears faster but this may not hold at 8B+ scale.</p>
+        <p><span class="tag tag-stable">STABLE</span>vLLM has near-zero variance across all phases (496ms ± 3.7ms steady). Ollama is also stable (448ms ± 21ms steady) once initialized.</p>
+        <p><span class="tag" style="background:#f97583;color:#fff">INIT OVERHEAD</span>Ollama's first-ever request takes 3,867ms (model initialization). Subsequent requests are ~380ms. vLLM has no such penalty after container start.</p>
+        <p><span class="tag" style="background:#484f58;color:#fff">NEXT STEP</span>Need a 7B GGUF test for meaningful results. Qwen2.5-7B or Llama-3.1-8B in GGUF format loaded by both engines.</p>
+        <p><strong>Raw log:</strong> <span class="log-link">logs/bench_3phase_qwen05_fair_comparison_2026-05-02.json</span></p>
+      </div>
+    </div>
+
+    <!-- ============================================================
+         TEST 1 & 2: LLAMA 3.1 8B 3-PHASE
+    ============================================================ -->
+    <div id="test-llama8b" class="test-section">
+      <div class="note">
+        <strong>⚠ Caveat:</strong> vLLM uses AWQ INT4 (safetensors), Ollama uses Q4_K_M GGUF. Different quantizations and formats — engine performance comparisons are unreliable. These reflect "what you'd get in practice" with each engine's recommended setup.
+      </div>
+
+      <div class="phase-legend">
+        <span><span class="phase-dot dot-cold"></span>Cold — purged before each run</span>
+        <span><span class="phase-dot dot-cached"></span>Cached — immediate repeat, same prompt</span>
+        <span><span class="phase-dot dot-steady"></span>Steady — 10-request burst, no purge</span>
+      </div>
+
+      <div class="summary-cards">
+        <div class="card">
+          <div class="card-label" style="color:#58a6ff">vLLM + TurboQuant</div>
+          <div class="card-value" style="color:#58a6ff">5,165<span style="font-size:1rem;font-weight:400">ms</span></div>
+          <div class="card-sub">Cold: 5,165ms / 50 tok/s &nbsp;|&nbsp; Steady: 10,809ms / 24 tok/s</div>
+          <div class="card-sub">GPU: 19,900 MiB &nbsp;|&nbsp; <span style="color:#f97583">109% slower under burst</span></div>
+        </div>
+        <div class="card">
+          <div class="card-label" style="color:#3fb950">vLLM (fp8, no TurboQuant)</div>
+          <div class="card-value" style="color:#3fb950">10,937<span style="font-size:1rem;font-weight:400">ms</span></div>
+          <div class="card-sub">Cold: 10,937ms / 23 tok/s &nbsp;|&nbsp; Steady: 11,412ms / 23 tok/s</div>
+          <div class="card-sub">GPU: 20,300 MiB &nbsp;|&nbsp; <span style="color:#3fb950">4% slower under burst (stable)</span></div>
+        </div>
+        <div class="card">
+          <div class="card-label" style="color:#f78166">Ollama (Q4_K_M GGUF)</div>
+          <div class="card-value" style="color:#f78166">51,285<span style="font-size:1rem;font-weight:400">ms</span></div>
+          <div class="card-sub">Cold: 51,285ms / 5 tok/s &nbsp;|&nbsp; Steady: 52,224ms / 5 tok/s</div>
+          <div class="card-sub">GPU: 5,454 MiB &nbsp;|&nbsp; <span style="color:#3fb950">1.8% slower under burst (stable)</span></div>
+        </div>
+      </div>
+
+      <div class="chart-grid">
+        <div class="chart-card"><div class="chart-title">Latency by Phase (ms, lower=better)</div><canvas id="llama8b-latency"></canvas></div>
+        <div class="chart-card"><div class="chart-title">Throughput by Phase (tok/s, higher=better)</div><canvas id="llama8b-throughput"></canvas></div>
+        <div class="chart-card"><div class="chart-title">GPU Memory (MiB)</div><canvas id="llama8b-memory"></canvas></div>
+        <div class="chart-card"><div class="chart-title">Steady-State Degradation vs Cold (%)</div><canvas id="llama8b-degradation"></canvas></div>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th>Phase</th><th style="color:#58a6ff">vLLM + TurboQuant</th><th style="color:#3fb950">vLLM (fp8)</th><th style="color:#f78166">Ollama Q4_K_M</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Cold Start</strong><br><span style="font-size:0.7rem;color:#8b949e">5 runs, purged before each</span></td>
             <td><span style="color:#58a6ff">5,165ms ± 12</span><br>50 tok/s</td>
             <td><span style="color:#3fb950">10,937ms ± 0</span><br>23 tok/s</td>
             <td><span style="color:#f78166">51,285ms ± 2,170</span><br>5 tok/s</td>
@@ -131,13 +264,13 @@
             <td><span style="color:#f78166">52,224ms ± 461</span><br>5 tok/s</td>
           </tr>
           <tr>
-            <td><strong>Cache Speedup</strong><br><span style="font-size:0.7rem;color:#8b949e">(Cold−Cached)/Cold</span></td>
+            <td><strong>Cache Speedup</strong></td>
             <td style="color:#8b949e">-2% (none)</td>
             <td style="color:#8b949e">0% (none)</td>
-            <td style="color:#8b949e">-1.4% (none)</td>
+            <td style="color:#8b949e">-1% (none)</td>
           </tr>
           <tr>
-            <td><strong>Steady Degradation</strong><br><span style="font-size:0.7rem;color:#8b949e">(Steady−Cold)/Cold</span></td>
+            <td><strong>Steady Degradation</strong></td>
             <td style="color:#f97583">+109% slower</td>
             <td style="color:#8b949e">+4% slower</td>
             <td style="color:#8b949e">+1.8% slower</td>
@@ -150,57 +283,233 @@
           </tr>
         </tbody>
       </table>
+
+      <div class="insight">
+        <h3>Cache provides zero speedup — prompt is too short</h3>
+        <p>Cold and Cache Hit phases are nearly identical for all engines. The ~35-token prompt KV is dwarfed by the 256-token generation. Cache shines when system prompts are long (RAG, multi-turn) — here it doesn't matter.</p>
+      </div>
+      <div class="insight">
+        <h3>TurboQuant has a steep steady-state cliff — 109% slower under burst</h3>
+        <p>TurboQuant starts fast (5.2s) but degrades to 10.8s under burst. fp8 is stable at 10.9s across all phases. For multi-user production servers, fp8 is the safer choice.</p>
+      </div>
+
+      <div class="verdict">
+        <h2>Findings (Llama 3.1 8B, different formats per engine)</h2>
+        <ul>
+          <li><strong>TurboQuant ~2x faster cold-start:</strong> 5.2s vs 10.9s (fp8) vs 51s (Ollama). KV compression (2.5x ratio) reduces memory bandwidth pressure.</li>
+          <li><strong>fp8 is the stable workhorse:</strong> 10.9s cold → 11.4s steady (4% degradation). Predictable, no cliff.</li>
+          <li><strong>Ollama is stable but 5x slower than TurboQuant:</strong> 51-52s across all phases. 73% lower memory is its main advantage.</li>
+          <li><strong>⚠ Don't compare engines across formats:</strong> AWQ INT4 vs Q4_K_M GGUF are different quantizations. See the fair comparison (Test 3) for same-GGUF results.</li>
+        </ul>
+        <p><strong>Raw logs:</strong>
+          <span class="log-link">logs/bench_3phase_vllm_turboquant_2026-05-01.json</span> ·
+          <span class="log-link">logs/bench_3phase_vllm_no_turbo_2026-05-01.json</span> ·
+          <span class="log-link">logs/bench_3phase_ollama_2026-05-01.json</span>
+        </p>
+      </div>
     </div>
 
-    <!-- Analysis -->
-    <div class="verdict">
-      <h2>Analysis</h2>
-      <p><span class="tag tag-fastest">FASTEST COLD</span>vLLM + TurboQuant at 5,165ms — 2x faster than fp8 on cold-start inference. The 2.5x KV compression ratio reduces memory bandwidth pressure during generation.</p>
-      <p><span class="tag" style="background:#a371f7;color:#fff">STABLE UNDER LOAD</span>vLLM fp8 stays at 10.9s across all phases (4% degradation vs 109% for TurboQuant). Best choice for multi-user servers where burst load is common.</p>
-      <p><span class="tag-best-mem">73% LESS VRAM</span>Ollama uses 5.5GB vs 20GB for vLLM. Good for memory-constrained environments or running alongside other workloads.</p>
+    <!-- ============================================================
+         TEST 0: SINGLE-PHASE (EARLIER)
+    ============================================================ -->
+    <div id="test-single" class="test-section">
+      <div class="note">
+        <strong>⚠ Legacy test (Apr 27).</strong> Single-run benchmarks without 3-phase methodology. No cache purging between runs. Kept for historical record only.
+      </div>
 
-      <h3 style="color:#f0f6fc;margin-top:20px;margin-bottom:8px">Why cache didn't help</h3>
-      <p>The prompt is only ~35 tokens. Its KV footprint is dwarfed by the 256-token generation. Cache speedup only matters when the prompt KV is a significant fraction of total compute — i.e., long system prompts in RAG or multi-turn chat.</p>
+      <table>
+        <thead>
+          <tr><th>Scenario</th><th>Model</th><th>Memory</th><th>Latency</th><th>Throughput</th><th>Date</th><th>Log</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>vLLM TurboQuant</td>
+            <td>Meta-Llama-3.1-8B-Instruct AWQ INT4</td>
+            <td>—</td>
+            <td>~16,000ms</td>
+            <td>16 tok/s</td>
+            <td>Apr 27</td>
+            <td><span class="log-link">logs/bench_vllm_turboquant_2026-04-27.json</span></td>
+          </tr>
+          <tr>
+            <td>vLLM (fp8)</td>
+            <td>Meta-Llama-3.1-8B-Instruct AWQ INT4 (fp8)</td>
+            <td>—</td>
+            <td>~34,000ms</td>
+            <td>7 tok/s</td>
+            <td>Apr 27</td>
+            <td><span class="log-link">logs/bench_vllm_no_turbo_2026-04-27.json</span></td>
+          </tr>
+          <tr>
+            <td>Ollama Q4_K_M</td>
+            <td>llama3.1:8b Q4_K_M GGUF</td>
+            <td>5,454 MiB</td>
+            <td>~50,000ms</td>
+            <td>5 tok/s</td>
+            <td>Apr 27</td>
+            <td><span class="log-link">logs/bench_ollama_2026-04-27.json</span></td>
+          </tr>
+        </tbody>
+      </table>
 
-      <h3 style="color:#f0f6fc;margin-top:16px;margin-bottom:8px">Why TurboQuant has a steady-state cliff</h3>
-      <p>TurboQuant's 2.5x compression means more KV entries fit in the same 20GB — but each entry is more tightly packed. When the cache fills under burst load, eviction forces recomputation from scratch, which hits the memory bus harder than fp8's larger but more predictable entries.</p>
-
-      <h3 style="color:#f0f6fc;margin-top:16px;margin-bottom:8px">Methodology note</h3>
-      <p>Each phase measures a distinct cache state. Cold = pure inference (cache purged). Cache Hit = KV reuse. Steady = sustained burst. This separates concerns that were conflated in earlier mixed benchmarks.</p>
+      <div class="verdict">
+        <h2>Note on Test 0</h2>
+        <p>These single-phase results are dominated by first-request initialization and mixed cache states. The 3-phase methodology (Tests 1-3) is far more reliable for drawing conclusions. Test 0 is kept for completeness only.</p>
+      </div>
     </div>
-    <footer>Benchmark tool · vLLM 0.20.0 · Ollama · NVIDIA L4 · May 1, 2026</footer>
+
+    <!-- ============================================================
+         ALL TESTS / HISTORY
+    ============================================================ -->
+    <div id="test-history" class="test-section">
+      <h2 style="font-size:1.2rem;margin-bottom:16px;color:#f0f6fc">Complete Test History</h2>
+      <div class="history-table">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Date</th>
+              <th>Test Name</th>
+              <th>Model</th>
+              <th>Fair?</th>
+              <th>max_tokens</th>
+              <th>vLLM Cold</th>
+              <th>Ollama Cold</th>
+              <th>vLLM Steady tps</th>
+              <th>Ollama Steady tps</th>
+              <th>Raw Log</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Test 3</td>
+              <td>May 2, 2026</td>
+              <td>Qwen 0.5B Fair (same GGUF)</td>
+              <td>Qwen2.5-0.5B-Instruct Q4_K_M GGUF</td>
+              <td><span class="badge badge-fair">✓ Fair</span></td>
+              <td>100</td>
+              <td>501ms</td>
+              <td>1,079ms</td>
+              <td>201,731</td>
+              <td>223,865</td>
+              <td><span class="log-link">logs/bench_3phase_qwen05_fair_comparison_2026-05-02.json</span></td>
+            </tr>
+            <tr>
+              <td>Test 2</td>
+              <td>May 1, 2026</td>
+              <td>3-Phase: Ollama Llama 3.1 8B</td>
+              <td>llama3.1:8b Q4_K_M GGUF</td>
+              <td><span class="badge badge-caveat">⚠ Diff formats</span></td>
+              <td>256</td>
+              <td>—</td>
+              <td>51,285ms</td>
+              <td>—</td>
+              <td>5</td>
+              <td><span class="log-link">logs/bench_3phase_ollama_2026-05-01.json</span></td>
+            </tr>
+            <tr>
+              <td>Test 1b</td>
+              <td>May 1, 2026</td>
+              <td>3-Phase: vLLM fp8 Llama 3.1 8B</td>
+              <td>Meta-Llama-3.1-8B-Instruct AWQ INT4 (fp8)</td>
+              <td><span class="badge badge-caveat">⚠ Diff formats</span></td>
+              <td>256</td>
+              <td>10,937ms</td>
+              <td>—</td>
+              <td>23</td>
+              <td>—</td>
+              <td><span class="log-link">logs/bench_3phase_vllm_no_turbo_2026-05-01.json</span></td>
+            </tr>
+            <tr>
+              <td>Test 1a</td>
+              <td>May 1, 2026</td>
+              <td>3-Phase: vLLM + TurboQuant Llama 3.1 8B</td>
+              <td>Meta-Llama-3.1-8B-Instruct AWQ INT4 + turboquant_k8v4</td>
+              <td><span class="badge badge-caveat">⚠ Diff formats</span></td>
+              <td>256</td>
+              <td>5,165ms</td>
+              <td>—</td>
+              <td>24</td>
+              <td>—</td>
+              <td><span class="log-link">logs/bench_3phase_vllm_turboquant_2026-05-01.json</span></td>
+            </tr>
+            <tr>
+              <td>Test 0</td>
+              <td>Apr 27, 2026</td>
+              <td>Single-phase: Llama 3.1 8B (legacy)</td>
+              <td>Same as above (mixed formats)</td>
+              <td><span class="badge badge-old">Legacy</span></td>
+              <td>256</td>
+              <td>~16,000ms</td>
+              <td>~50,000ms</td>
+              <td>16</td>
+              <td>5</td>
+              <td>See individual log files</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="verdict">
+        <h2>Log Files Reference</h2>
+        <p>All raw JSON logs are stored in the <code>logs/</code> directory and committed to GitHub for reproducibility.</p>
+        <ul>
+          <li><code>logs/bench_3phase_qwen05_fair_comparison_2026-05-02.json</code> — ★ Fair comparison (same GGUF on both engines)</li>
+          <li><code>logs/bench_3phase_vllm_turboquant_2026-05-01.json</code> — vLLM + TurboQuant 3-phase</li>
+          <li><code>logs/bench_3phase_vllm_no_turbo_2026-05-01.json</code> — vLLM fp8 3-phase</li>
+          <li><code>logs/bench_3phase_ollama_2026-05-01.json</code> — Ollama Q4_K_M 3-phase</li>
+          <li><code>logs/bench_vllm_turboquant_2026-04-27.json</code> — Legacy single-phase</li>
+          <li><code>logs/bench_vllm_no_turbo_2026-04-27.json</code> — Legacy single-phase</li>
+          <li><code>logs/bench_ollama_2026-04-27.json</code> — Legacy single-phase</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>Benchmark suite · vLLM 0.20.0 · Ollama · NVIDIA L4 · May 2, 2026</footer>
   </div>
 
   <script>
-    var scenarios = [
+    // ================================================================
+    // Chart data
+    // ================================================================
+
+    // Fair comparison (Qwen 0.5B, same GGUF)
+    var fairScenarios = [
       {
-        name: "vLLM + TurboQuant", key: "vllm_turboquant", color: "#58a6ff",
-        cold:     { latency: {mean:5165, stdev:12},  throughput: {mean:50} },
-        cached:   { latency: {mean:5255, stdev:91},  throughput: {mean:49} },
-        steady:   { latency: {mean:10809, stdev:858}, throughput: {mean:24} },
-        gpu_mem: 19900,
+        name: "vLLM GGUF", color: "#58a6ff",
+        cold: 501, cached: 496, steady: 496,
+        coldTps: 199650, cachedTps: 201427, steadyTps: 201731,
+        gpuMem: 6879
       },
       {
-        name: "vLLM (fp8)", key: "vllm_no_turbo", color: "#3fb950",
-        cold:     { latency: {mean:10937, stdev:0},   throughput: {mean:23} },
-        cached:   { latency: {mean:10940, stdev:2},   throughput: {mean:23} },
-        steady:   { latency: {mean:11412, stdev:1471},throughput: {mean:23} },
-        gpu_mem: 20300,
-      },
-      {
-        name: "Ollama (Q4_K_M)", key: "ollama", color: "#f78166",
-        cold:     { latency: {mean:51285, stdev:2170}, throughput: {mean:5} },
-        cached:   { latency: {mean:52023, stdev:707}, throughput: {mean:5} },
-        steady:   { latency: {mean:52224, stdev:461}, throughput: {mean:5} },
-        gpu_mem: 5454,
-      },
+        name: "Ollama GGUF", color: "#3fb950",
+        cold: 1079, cached: 425, steady: 448,
+        coldTps: 214740, cachedTps: 235597, steadyTps: 223865,
+        gpuMem: 5454
+      }
     ];
 
-    var phaseKeys  = ["cold", "cached", "steady"];
-    var phaseNames = ["Cold Start", "Cache Hit", "Steady-State"];
-    var phaseColors = ["#f97583", "#85e89d", "#79c0ff"];
-
-    var labels = scenarios.map(function(s) { return s.name; });
+    // Llama 8B 3-phase (different formats per engine — caveat)
+    var llamaScenarios = [
+      {
+        name: "vLLM + TurboQuant", color: "#58a6ff",
+        cold: 5165, cached: 5255, steady: 10809,
+        coldTps: 50, cachedTps: 49, steadyTps: 24,
+        gpuMem: 19900
+      },
+      {
+        name: "vLLM (fp8)", color: "#3fb950",
+        cold: 10937, cached: 10940, steady: 11412,
+        coldTps: 23, cachedTps: 23, steadyTps: 23,
+        gpuMem: 20300
+      },
+      {
+        name: "Ollama Q4_K_M", color: "#f78166",
+        cold: 51285, cached: 52023, steady: 52224,
+        coldTps: 5, cachedTps: 5, steadyTps: 5,
+        gpuMem: 5454
+      }
+    ];
 
     var chartDefaults = {
       responsive: true,
@@ -211,90 +520,120 @@
       }
     };
 
-    new Chart(document.getElementById("latencyChart"), {
-      type: "bar",
+    function makeBarChart(canvasId, labels, datasets) {
+      new Chart(document.getElementById(canvasId), {
+        type: "bar",
+        data: { labels: labels, datasets: datasets },
+        options: chartDefaults
+      });
+    }
+
+    // ---- Fair comparison charts ----
+    makeBarChart("fair-latency",
+      fairScenarios.map(s => s.name),
+      [
+        { label: "Cold", data: fairScenarios.map(s => s.cold), bg: "#f97583cc", border: "#f97583" },
+        { label: "Cached", data: fairScenarios.map(s => s.cached), bg: "#85e89dcc", border: "#85e89d" },
+        { label: "Steady", data: fairScenarios.map(s => s.steady), bg: "#79c0ffcc", border: "#79c0ff" },
+      ].map(d => Object.assign({}, d, { borderWidth: 1, borderRadius: 4 })),
+    );
+
+    makeBarChart("fair-throughput",
+      fairScenarios.map(s => s.name),
+      [
+        { label: "Cold", data: fairScenarios.map(s => s.coldTps), bg: "#f97583cc", border: "#f97583" },
+        { label: "Cached", data: fairScenarios.map(s => s.cachedTps), bg: "#85e89dcc", border: "#85e89d" },
+        { label: "Steady", data: fairScenarios.map(s => s.steadyTps), bg: "#79c0ffcc", border: "#79c0ff" },
+      ].map(d => Object.assign({}, d, { borderWidth: 1, borderRadius: 4 })),
+    );
+
+    makeBarChart("fair-memory",
+      fairScenarios.map(s => s.name),
+      [{ label: "GPU Memory", data: fairScenarios.map(s => s.gpuMem), bg: fairScenarios.map(s => s.color + "cc"), border: fairScenarios.map(s => s.color), borderWidth: 1, borderRadius: 4 }]
+    );
+
+    // Per-run latency scatter
+    new Chart(document.getElementById("fair-runs"), {
+      type: "line",
       data: {
-        labels: labels,
-        datasets: phaseKeys.map(function(pk, i) {
-          return {
-            label: phaseNames[i],
-            data: scenarios.map(function(s) { return s[pk].latency.mean; }),
-            backgroundColor: phaseColors[i] + "cc",
-            borderColor: phaseColors[i],
-            borderWidth: 1, borderRadius: 4,
-          };
-        })
+        labels: Array.from({length:10}, (_,i) => "Run " + (i+1)),
+        datasets: [
+          {
+            label: "vLLM Steady",
+            data: [496, 496, 492, 491, 501, 496, 491, 502, 496, 497],
+            borderColor: "#58a6ff", backgroundColor: "#58a6ff33",
+            borderWidth: 2, pointRadius: 4,
+          },
+          {
+            label: "Ollama Steady",
+            data: [412, 408, 453, 446, 460, 462, 473, 459, 446, 458],
+            borderColor: "#3fb950", backgroundColor: "#3fb95033",
+            borderWidth: 2, pointRadius: 4,
+          }
+        ]
       },
       options: Object.assign({}, chartDefaults, {
-        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ": " + ctx.parsed.y.toFixed(0) + " ms"; } } } }
+        scales: { y: { min: 380, max: 520 } }
       })
     });
 
-    new Chart(document.getElementById("throughputChart"), {
-      type: "bar",
-      data: {
-        labels: labels,
-        datasets: phaseKeys.map(function(pk, i) {
-          return {
-            label: phaseNames[i],
-            data: scenarios.map(function(s) { return s[pk].throughput.mean || 0; }),
-            backgroundColor: phaseColors[i] + "cc",
-            borderColor: phaseColors[i],
-            borderWidth: 1, borderRadius: 4,
-          };
-        })
-      },
-      options: Object.assign({}, chartDefaults, {
-        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ": " + ctx.parsed.y + " tok/s"; } } } }
-      })
-    });
+    // ---- Llama 8B charts ----
+    makeBarChart("llama8b-latency",
+      llamaScenarios.map(s => s.name),
+      [
+        { label: "Cold", data: llamaScenarios.map(s => s.cold), bg: "#f97583cc", border: "#f97583" },
+        { label: "Cached", data: llamaScenarios.map(s => s.cached), bg: "#85e89dcc", border: "#85e89d" },
+        { label: "Steady", data: llamaScenarios.map(s => s.steady), bg: "#79c0ffcc", border: "#79c0ff" },
+      ].map(d => Object.assign({}, d, { borderWidth: 1, borderRadius: 4 })),
+    );
 
-    new Chart(document.getElementById("memoryChart"), {
-      type: "bar",
-      data: {
-        labels: labels,
-        datasets: [{
-          label: "GPU Memory",
-          data: scenarios.map(function(s) { return s.gpu_mem; }),
-          backgroundColor: scenarios.map(function(s) { return s.color + "cc"; }),
-          borderColor: scenarios.map(function(s) { return s.color; }),
-          borderWidth: 1, borderRadius: 4,
-        }]
-      },
-      options: Object.assign({}, chartDefaults, {
-        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + " MiB"; } } } },
-        scales: { y: { min: 0 } }
-      })
-    });
+    makeBarChart("llama8b-throughput",
+      llamaScenarios.map(s => s.name),
+      [
+        { label: "Cold", data: llamaScenarios.map(s => s.coldTps), bg: "#f97583cc", border: "#f97583" },
+        { label: "Cached", data: llamaScenarios.map(s => s.cachedTps), bg: "#85e89dcc", border: "#85e89d" },
+        { label: "Steady", data: llamaScenarios.map(s => s.steadyTps), bg: "#79c0ffcc", border: "#79c0ff" },
+      ].map(d => Object.assign({}, d, { borderWidth: 1, borderRadius: 4 })),
+    );
 
-    new Chart(document.getElementById("degradationChart"), {
+    makeBarChart("llama8b-memory",
+      llamaScenarios.map(s => s.name),
+      [{ label: "GPU Memory", data: llamaScenarios.map(s => s.gpuMem), bg: llamaScenarios.map(s => s.color + "cc"), border: llamaScenarios.map(s => s.color), borderWidth: 1, borderRadius: 4 }]
+    );
+
+    // Degradation chart
+    new Chart(document.getElementById("llama8b-degradation"), {
       type: "bar",
       data: {
-        labels: labels,
+        labels: llamaScenarios.map(s => s.name),
         datasets: [{
           label: "Steady degradation vs cold (%)",
-          data: scenarios.map(function(s) {
-            if (!s.cold.latency.mean || !s.steady.latency.mean) return 0;
-            return ((s.steady.latency.mean - s.cold.latency.mean) / s.cold.latency.mean * 100).toFixed(1);
-          }),
-          backgroundColor: scenarios.map(function(s) {
-            var d = s.steady.latency.mean && s.cold.latency.mean
-              ? (s.steady.latency.mean - s.cold.latency.mean) / s.cold.latency.mean * 100 : 0;
+          data: llamaScenarios.map(s => ((s.steady - s.cold) / s.cold * 100).toFixed(1)),
+          backgroundColor: llamaScenarios.map(s => {
+            var d = (s.steady - s.cold) / s.cold * 100;
             return d > 50 ? "#f97583cc" : "#85e89dcc";
           }),
-          borderColor: scenarios.map(function(s) {
-            var d = s.steady.latency.mean && s.cold.latency.mean
-              ? (s.steady.latency.mean - s.cold.latency.mean) / s.cold.latency.mean * 100 : 0;
+          borderColor: llamaScenarios.map(s => {
+            var d = (s.steady - s.cold) / s.cold * 100;
             return d > 50 ? "#f97583" : "#85e89d";
           }),
-          borderWidth: 1, borderRadius: 4,
+          borderWidth: 1, borderRadius: 4
         }]
       },
       options: Object.assign({}, chartDefaults, {
-        plugins: { tooltip: { callbacks: { label: function(ctx) { return ctx.parsed.y + "% slower in steady-state"; } } } },
         scales: { y: { min: 0 } }
       })
     });
+
+    // ================================================================
+    // Tab navigation
+    // ================================================================
+    function showTest(id) {
+      document.querySelectorAll('.test-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.test-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('test-' + id).classList.add('active');
+      document.querySelector('.test-btn[onclick="showTest(\\'' + id + '\\')"]').classList.add('active');
+    }
   </script>
 </body>
 </html>
