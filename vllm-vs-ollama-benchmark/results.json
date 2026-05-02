@@ -1,104 +1,122 @@
 {
-  "test_4_llama38b_gguf_fair": {
-    "date": "2026-05-02",
-    "description": "Fair comparison: Llama 3.1 8B Q4_K_M GGUF (same file) on both vLLM and Ollama",
-    "fair": true,
-    "model": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-    "vllm": {
-      "port": 8004,
-      "load_format": "gguf",
-      "max_model_len": 2048,
-      "cuda_graphs": true,
-      "gpu_memory_gb": 14.1,
-      "cold": {"runs": 3, "avg_lat_ms": 5356.1, "std_ms": 166.9, "avg_tps": 18.7},
-      "cached": {"runs": 2, "avg_lat_ms": 5259.9, "std_ms": 0.2, "avg_tps": 19.0},
-      "steady": {"runs": 5, "avg_lat_ms": 5259.7, "std_ms": 0.5, "avg_tps": 19.0}
+  "cases": [
+    {
+      "case": "vllm_turboquant",
+      "results": [
+        {
+          "io_key": "trans",
+          "io_name": "Translation (400/400)",
+          "cold_lat": 5319.0,
+          "cold_tp": 14.9,
+          "cached_lat": 7839.0,
+          "cached_tp": 7.6,
+          "steady_lat": 8960.0,
+          "steady_tp": 7.6,
+          "gpu_mem": 19482.0
+        },
+        {
+          "io_key": "gen",
+          "io_name": "Generation (200/2000)",
+          "cold_lat": 56181.0,
+          "cold_tp": 5.2,
+          "cached_lat": 60588.0,
+          "cached_tp": 4.9,
+          "steady_lat": 61059.0,
+          "steady_tp": 4.9,
+          "gpu_mem": 19482.0
+        },
+        {
+          "io_key": "summ",
+          "io_name": "Summarization (2000/200)",
+          "cold_lat": 23271.0,
+          "cold_tp": 5.5,
+          "cached_lat": 24326.0,
+          "cached_tp": 4.9,
+          "steady_lat": 24405.0,
+          "steady_tp": 4.9,
+          "gpu_mem": 19482.0
+        }
+      ],
+      "ts": "2026-05-02T09:45:00"
     },
-    "ollama": {
-      "model": "llama3.1:8b-gguf",
-      "gpu_memory_gb": 5.5,
-      "cold": {"runs": 3, "avg_lat_ms": 5897.2, "std_ms": 669.8, "avg_tps": 17.1},
-      "cached": {"runs": 2, "avg_lat_ms": 5519.5, "std_ms": 4.2, "avg_tps": 18.1},
-      "steady": {"runs": 5, "avg_lat_ms": 5507.6, "std_ms": 5.7, "avg_tps": 18.2}
+    {
+      "case": "vllm_fp8",
+      "results": [
+        {
+          "io_key": "trans",
+          "io_name": "Translation (400/400)",
+          "cold_lat": 2926.0,
+          "cold_tp": 23.4,
+          "cached_lat": 3296.0,
+          "cached_tp": 23.4,
+          "steady_lat": 3124.0,
+          "steady_tp": 23.4,
+          "gpu_mem": 19158.0
+        },
+        {
+          "io_key": "gen",
+          "io_name": "Generation (200/2000)",
+          "cold_lat": 12872.0,
+          "cold_tp": 23.3,
+          "cached_lat": 21101.0,
+          "cached_tp": 11.7,
+          "steady_lat": 28886.0,
+          "steady_tp": 9.0,
+          "gpu_mem": 19158.0
+        },
+        {
+          "io_key": "summ",
+          "io_name": "Summarization (2000/200)",
+          "cold_lat": 11885.0,
+          "cold_tp": 10.8,
+          "cached_lat": 14642.0,
+          "cached_tp": 8.8,
+          "steady_lat": 14631.0,
+          "steady_tp": 8.7,
+          "gpu_mem": 19158.0
+        }
+      ],
+      "ts": "2026-05-02T10:00:00"
     },
-    "winner": "vLLM (5-9% faster, higher memory footprint)",
-    "log_files": [
-      "logs/bench_3phase_vllm_llama38b_gguf_cudagraph_2026-05-02.json",
-      "logs/bench_3phase_ollama_llama38b_gguf_2026-05-02_actual.json"
-    ]
-  },
-  "test_3_qwen05_gguf_fair": {
-    "date": "2026-05-02",
-    "description": "Fair comparison: Qwen2.5-0.5B Q4_K_M GGUF (same file) on both vLLM and Ollama",
-    "fair": true,
-    "model": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
-    "vllm": {
-      "port": 8001,
-      "load_format": "gguf",
-      "gpu_memory_gb": 6.9,
-      "cold": {"runs": 3, "avg_lat_ms": 501, "avg_tps": 199650},
-      "cached": {"runs": 2, "avg_lat_ms": 496, "avg_tps": 201731},
-      "steady": {"runs": 5, "avg_lat_ms": 496, "avg_tps": 201731}
-    },
-    "ollama": {
-      "model": "qwen2.5:0.5b-q4_k_m",
-      "gpu_memory_gb": 5.5,
-      "cold": {"runs": 3, "avg_lat_ms": 1079, "avg_tps": 214740},
-      "cached": {"runs": 2, "avg_lat_ms": 425, "avg_tps": 235294},
-      "steady": {"runs": 5, "avg_lat_ms": 448, "avg_tps": 223865}
-    },
-    "winner": "Ollama (10% faster, 20% less memory)",
-    "log_files": ["logs/bench_3phase_qwen05_fair_comparison_2026-05-02.json"]
-  },
-  "test_2_ollama_llama8b": {
-    "date": "2026-05-01",
-    "description": "Ollama Llama 3.1 8B Q4_K_M GGUF (native Ollama model)",
-    "fair": false,
-    "note": "Different format/quantization from vLLM tests — not directly comparable",
-    "model": "llama3.1:8b",
-    "gpu_memory_gb": 5.5,
-    "cold": {"runs": 3, "avg_lat_ms": 51285, "avg_tps": 5},
-    "cached": {"runs": 2, "avg_lat_ms": 52023, "avg_tps": 5},
-    "steady": {"runs": 5, "avg_lat_ms": 52224, "avg_tps": 5},
-    "log_files": ["logs/bench_3phase_ollama_2026-05-01.json"]
-  },
-  "test_1b_vllm_fp8": {
-    "date": "2026-05-01",
-    "description": "vLLM Llama 3.1 8B fp16/fp8 (no TurboQuant, AWQ weights)",
-    "fair": false,
-    "note": "Different format/quantization from Ollama tests — not directly comparable",
-    "model": "casual-ai/Meta-Llama-3.1-8B-Instruct-AWQ",
-    "gpu_memory_gb": 20.3,
-    "cold": {"runs": 3, "avg_lat_ms": 10937, "avg_tps": 23},
-    "cached": {"runs": 2, "avg_lat_ms": 10940, "avg_tps": 23},
-    "steady": {"runs": 5, "avg_lat_ms": 11412, "avg_tps": 23},
-    "log_files": ["logs/bench_3phase_vllm_no_turbo_2026-05-01.json"]
-  },
-  "test_1a_vllm_turboquant": {
-    "date": "2026-05-01",
-    "description": "vLLM + TurboQuant Llama 3.1 8B AWQ INT4",
-    "fair": false,
-    "note": "Different format/quantization from Ollama tests — not directly comparable",
-    "model": "casual-ai/Meta-Llama-3.1-8B-Instruct-AWQ + TurboQuant",
-    "gpu_memory_gb": 19.9,
-    "cold": {"runs": 3, "avg_lat_ms": 5165, "avg_tps": 50},
-    "cached": {"runs": 2, "avg_lat_ms": 5255, "avg_tps": 49},
-    "steady": {"runs": 5, "avg_lat_ms": 10809, "avg_tps": 24},
-    "log_files": ["logs/bench_3phase_vllm_turboquant_2026-05-01.json"]
-  },
-  "test_0_legacy": {
-    "date": "2026-04-27",
-    "description": "Earlier single-phase benchmark (mixed cache states)",
-    "fair": false,
-    "results": {
-      "vllm_turboquant": {"lat_ms": 16000, "tps": 16, "memory_gb": null},
-      "vllm_fp8": {"lat_ms": 34000, "tps": 7, "memory_gb": null},
-      "ollama_q4km": {"lat_ms": 50000, "tps": 5, "memory_gb": 5.5}
-    },
-    "log_files": [
-      "logs/bench_vllm_turboquant_2026-04-27.json",
-      "logs/bench_vllm_no_turbo_2026-04-27.json",
-      "logs/bench_ollama_2026-04-27.json"
-    ]
-  }
+    {
+      "case": "ollama",
+      "results": [
+        {
+          "io_key": "trans",
+          "io_name": "Translation (400/400)",
+          "cold_lat": 3894.0,
+          "cold_tp": 18.1,
+          "cached_lat": 5190.0,
+          "cached_tp": 9.2,
+          "steady_lat": 7430.0,
+          "steady_tp": 9.2,
+          "gpu_mem": 5456.0
+        },
+        {
+          "io_key": "gen",
+          "io_name": "Generation (200/2000)",
+          "cold_lat": 33121.0,
+          "cold_tp": 5.6,
+          "cached_lat": 36028.0,
+          "cached_tp": 5.5,
+          "steady_lat": 36485.0,
+          "steady_tp": 5.5,
+          "gpu_mem": 5456.0
+        },
+        {
+          "io_key": "summ",
+          "io_name": "Summarization (2000/200)",
+          "cold_lat": 21366.0,
+          "cold_tp": 5.5,
+          "cached_lat": 21856.0,
+          "cached_tp": 5.5,
+          "steady_lat": 22714.0,
+          "steady_tp": 5.5,
+          "gpu_mem": 5456.0
+        }
+      ],
+      "ts": "2026-05-02T10:45:00"
+    }
+  ],
+  "generated": "2026-05-02 10:59"
 }
