@@ -1,0 +1,81 @@
+============================================================
+  Ollama Tuned — GPU Layers + Flash Attention + KV q8_0
+============================================================
+  OLLAMA_GPU_LAYERS=999
+  OLLAMA_NUM_GPU=999
+  OLLAMA_CONTEXT_LENGTH=16384
+  OLLAMA_FLASH_ATTENTION=1
+  OLLAMA_KV_CACHE_TYPE=q8_0
+  OLLAMA_MAX_GPU_MEMORY=12G
+
+  Stopping ollama...
+  Starting ollama with tuned env...
+  ✓ Ollama ready (0s)
+
+  Available models: ['llama3.1:8b-gguf', 'qwen2.5:0.5b-q4_k_m', 'llama3.1:8b']
+
+  Warmup...
+
+  ── Translation (400/400) ──
+  [Cold Start] (3 runs)
+    Run 1: 2,556ms  |  47.7 tok/s  |  ~122 tokens
+    Run 2: 2,834ms  |  48.0 tok/s  |  ~136 tokens
+    Run 3: 2,802ms  |  47.8 tok/s  |  ~134 tokens
+  [Cache Hit] (3 runs)
+    Run 1: 2,730ms  |  47.6 tok/s  |  ~130 tokens
+    Run 2: 2,576ms  |  47.8 tok/s  |  ~123 tokens
+    Run 3: 2,646ms  |  47.6 tok/s  |  ~126 tokens
+  [Steady-State] (3 runs)
+    Run 1: 2,358ms  |  47.5 tok/s  |  ~112 tokens
+    Run 2: 2,812ms  |  47.7 tok/s  |  ~134 tokens
+    Run 3: 2,710ms  |  47.6 tok/s  |  ~129 tokens
+
+  ── Generation (200/2000) ──
+  [Cold Start] (3 runs)
+    Run 1: 6,294ms  |  47.7 tok/s  |  ~300 tokens
+    Run 2: 6,290ms  |  47.7 tok/s  |  ~300 tokens
+    Run 3: 6,279ms  |  47.8 tok/s  |  ~300 tokens
+  [Cache Hit] (3 runs)
+    Run 1: 6,297ms  |  47.6 tok/s  |  ~300 tokens
+    Run 2: 6,334ms  |  47.4 tok/s  |  ~300 tokens
+    Run 3: 6,332ms  |  47.4 tok/s  |  ~300 tokens
+  [Steady-State] (3 runs)
+    Run 1: 6,366ms  |  47.1 tok/s  |  ~300 tokens
+    Run 2: 9,651ms  |  31.1 tok/s  |  ~300 tokens
+    Run 3: 16,641ms  |  18.0 tok/s  |  ~300 tokens
+
+  ── Summarization (2000/200) ──
+  [Cold Start] (3 runs)
+    Run 1: 6,006ms  |  16.7 tok/s  |  ~100 tokens
+    Run 2: 6,191ms  |  17.8 tok/s  |  ~110 tokens
+    Run 3: 6,249ms  |  17.8 tok/s  |  ~111 tokens
+  [Cache Hit] (3 runs)
+    Run 1: 6,184ms  |  17.8 tok/s  |  ~110 tokens
+    Run 2: 6,125ms  |  17.8 tok/s  |  ~109 tokens
+    Run 3: 6,576ms  |  17.8 tok/s  |  ~117 tokens
+  [Steady-State] (3 runs)
+    Run 1: 5,518ms  |  17.8 tok/s  |  ~98 tokens
+    Run 2: 5,910ms  |  17.8 tok/s  |  ~105 tokens
+    Run 3: 5,850ms  |  17.8 tok/s  |  ~104 tokens
+
+
+============================================================
+  SUMMARY
+============================================================
+  Translation (400/400):
+    Cold:    2731ms / 47.8 tok/s
+    Cached:  2650ms / 47.7 tok/s
+    Steady:  2627ms / 47.6 tok/s
+    GPU: 6140.0 MiB
+  Generation (200/2000):
+    Cold:    6287ms / 47.7 tok/s
+    Cached:  6321ms / 47.5 tok/s
+    Steady:  10886ms / 32.1 tok/s
+    GPU: 6140.0 MiB
+  Summarization (2000/200):
+    Cold:    6149ms / 17.4 tok/s
+    Cached:  6295ms / 17.8 tok/s
+    Steady:  5759ms / 17.8 tok/s
+    GPU: 6144.0 MiB
+
+Results saved to results_ollama_tuned.json

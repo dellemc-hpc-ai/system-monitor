@@ -281,23 +281,47 @@ python3 /tmp/run_case3_ollama.py
 
 ### 结果汇总
 
-|| IO Config | Phase | TurboQuant (Corrected) | fp8 (Corrected) | Ollama Q4_K_M |
+|| IO Config | Phase | TurboQuant (Corrected) | fp8 (Corrected) | Ollama Q4_K_M (Old) | Ollama Tuned |
 ||---|---|---|---|---|---|
-|| **Translation (400/400)** | Cold | 4,283ms / 29.9 tok/s | 5,964ms / 23.3 tok/s | 16,145ms / 7.9 tok/s |
-|| | Steady | 4,222ms / 29.8 tok/s | 5,588ms / 23.3 tok/s | 23,125ms / 5.4 tok/s |
-|| **Generation (200/2000)** | Cold | 10,103ms / 29.7 tok/s | 12,881ms / 23.3 tok/s | 57,887ms / 5.2 tok/s |
-|| | Steady | 20,145ms / 14.9 tok/s | 23,041ms / 13.3 tok/s | 58,088ms / 5.2 tok/s |
-|| **Summarization (2000/200)** | Cold | 6,798ms / 14.5 tok/s | 8,746ms / 11.4 tok/s | 19,802ms / 5.2 tok/s |
-|| | Steady | 7,399ms / 14.8 tok/s | 9,483ms / 11.4 tok/s | 21,858ms / 5.3 tok/s |
-|| **GPU Memory** | — | 19,438 MiB | 19,158 MiB | **5,456 MiB** |
+|| **Translation (400/400)** | Cold | 4,283ms / 29.9 tok/s | 5,964ms / 23.3 tok/s | 16,145ms / 7.9 tok/s | **2,731ms / 47.8 tok/s** |
+|| | Steady | 4,222ms / 29.8 tok/s | 5,588ms / 23.3 tok/s | 23,125ms / 5.4 tok/s | **2,627ms / 47.6 tok/s** |
+|| **Generation (200/2000)** | Cold | 10,103ms / 29.7 tok/s | 12,881ms / 23.3 tok/s | 57,887ms / 5.2 tok/s | **6,287ms / 47.7 tok/s** |
+|| | Steady | 20,145ms / 14.9 tok/s | 23,041ms / 13.3 tok/s | 58,088ms / 5.2 tok/s | **10,886ms / 32.1 tok/s** |
+|| **Summarization (2000/200)** | Cold | 6,798ms / 14.5 tok/s | 8,746ms / 11.4 tok/s | 19,802ms / 5.2 tok/s | **6,149ms / 17.4 tok/s** |
+|| | Steady | 7,399ms / 14.8 tok/s | 9,483ms / 11.4 tok/s | 21,858ms / 5.3 tok/s | **5,759ms / 17.8 tok/s** |
+|| **GPU Memory** | — | 19,438 MiB | 19,158 MiB | 5,456 MiB | **6,140 MiB** |
 
 **核心发现：**
-- **TurboQuant k8v4 修复后全面领先 fp8**：Translation 冷启动快 28%（4.3s vs 5.9s），吞吐量高 28%（29.9 vs 23.3 tok/s）
-- **Generation 任务 TurboQuant 优势最大**：冷启动快 22%（10.1s vs 12.9s），Steady-State 吞吐量高 12%（14.9 vs 13.3 tok/s）
-- **Ollama GPU 占用最低**（5.5GB），但速度最慢（比 vLLM 慢 3-5×）
-- **Cache Hit 无明显加速**：各 engine 的 cached ≈ cold，说明短 prompt 场景下 KV cache 收益有限
+- **Ollama 调优后全面超越 vLLM TurboQuant**：GPU layers + Flash Attention + KV q8_0 使 Ollama 在所有任务上领先 10-46%
+- **调优提升 3-9×**：相比默认 Ollama，调优后 Translation 速度快 5.9×，Generation 速度快 9.2×
+- **GPU 占用仅涨 684MB**（5.5GB → 6.1GB），但吞吐量提升近 10×
+- **TurboQuant k8v4 仍领先 fp8**：修复后全面优于 fp8 配置
 
 > ⚠️ 注意：Case 1 & 2 使用 `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4`（AWQ INT4），Case 3 使用 `llama3.1:8b`（Q4_K_M GGUF），不是同一个模型文件。结果反映的是各自推荐配置的实践对比。
+
+### Ollama 调优参数
+
+以下环境变量通过 systemd override 注入，使 Ollama 性能提升 3-9×：
+
+```bash
+# /etc/systemd/system/ollama.service.d/gpu-tweak.conf
+[Service]
+Environment="OLLAMA_GPU_LAYERS=999"
+Environment="OLLAMA_NUM_GPU=999"
+Environment="OLLAMA_CONTEXT_LENGTH=16384"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
+Environment="OLLAMA_MAX_GPU_MEMORY=12G"
+```
+
+关键参数说明：
+
+| 参数 | 作用 | 效果 |
+|---|---|---|
+| `OLLAMA_GPU_LAYERS=999` | 全部 Transformer 层加载到 GPU | 避免 CPU/GPU 数据传输瓶颈 |
+| `OLLAMA_FLASH_ATTENTION=1` | 启用 Flash Attention 2 | 降低注意力计算复杂度 O(N²)→O(N) |
+| `OLLAMA_KV_CACHE_TYPE=q8_0` | KV cache 8bit 量化 | 大幅减少内存带宽占用 |
+| `OLLAMA_MAX_GPU_MEMORY=12G` | 限制 GPU 显存使用 | 留空间给 KV cache |
 
 ---
 
