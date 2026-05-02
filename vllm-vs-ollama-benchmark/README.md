@@ -183,7 +183,126 @@ Positive = cache helps. Zero = cache not helping for this workload.
 
 ---
 
-## Running the Benchmark
+## Test 5: 3 Cases × 3 IOLengths (2026-05-02) ⚠️ Different Model Formats
+
+> **注意：3 个 Case 使用了不同的模型格式，不是同一个模型文件。** 这是因为 Ollama 原生只支持 GGUF 格式加载本地模型，无法直接加载 Hugging Face 的 AWQ INT4 量化模型。因此：
+> - Case 1 & 2：使用 `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4`（AWQ INT4，Hugging Face 格式）
+> - Case 3：使用 `llama3.1:8b`（Q4_K_M GGUF，Ollama 格式）
+>
+> 结果反映的是"实际生产环境中各自推荐配置"的对比，而非严格控制的公平比较。
+
+### 运行环境命令
+
+**Case 1 — vLLM + TurboQuant k8v4**
+
+```bash
+# 停止其他容器
+sudo docker stop vllm-turbo vllm-fp8 2>/dev/null; sudo docker rm vllm-turbo vllm-fp8 2>/dev/null
+
+# 启动 TurboQuant 容器（端口 8000）
+sudo docker run -d \
+  --name vllm-turbo \
+  --runtime nvidia --gpus all \
+  --shm-size 16g \
+  -p 8000:8000 \
+  -v /home/frank/.cache/huggingface:/root/.cache/huggingface \
+  -e VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 \
+  vllm/vllm-openai:latest \
+  --model hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4 \
+  --port 8000 \
+  --trust-remote-code \
+  --kv-cache-dtype turboquant_k8v4 \
+  --gpu-memory-utilization 0.85 \
+  --max-model-len 8192 \
+  --enforce-eager
+
+# 等待模型加载（约 90s）
+sleep 90 && curl -s http://localhost:8000/health
+
+# 运行 benchmark
+python3 /tmp/run_case1.py
+# 结果保存至：results_case1.json
+```
+
+**Case 2 — vLLM fp8**
+
+```bash
+# 停止 TurboQuant 容器
+sudo docker stop vllm-turbo && sudo docker rm vllm-turbo
+
+# 启动 fp8 容器（端口 8000）
+sudo docker run -d \
+  --name vllm-fp8 \
+  --runtime nvidia --gpus all \
+  --shm-size 16g \
+  -p 8000:8000 \
+  -v /home/frank/.cache/huggingface:/root/.cache/huggingface \
+  -e VLLM_ALLOW_LONG_MAX_MODEL_LEN=1 \
+  vllm/vllm-openai:latest \
+  --model hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4 \
+  --port 8000 \
+  --trust-remote-code \
+  --kv-cache-dtype fp8 \
+  --gpu-memory-utilization 0.85 \
+  --max-model-len 8192
+
+# 等待模型加载（约 90s）
+sleep 90 && curl -s http://localhost:8000/health
+
+# 修改 run_case1.py 中的 PORT=8000 后运行
+python3 /tmp/run_case2.py
+# 结果保存至：results_case2.json
+```
+
+**Case 3 — Ollama Q4_K_M GGUF**
+
+```bash
+# 停止 vLLM 容器
+sudo docker stop vllm-fp8 && sudo docker rm vllm-fp8
+
+# 确保 Ollama 运行中
+curl -s http://localhost:11434/api/tags | python3 -c "import sys,json; print([m['name'] for m in json.load(sys.stdin).get('models',[])])"
+
+# 运行 benchmark
+python3 /tmp/run_case3_ollama.py
+# 结果保存至：results_case3.json
+```
+
+### 运行脚本
+
+- `/tmp/run_case1.py` — Case 1（vLLM TurboQuant）测试脚本
+- `/tmp/run_case2.py` — Case 2（vLLM fp8）测试脚本
+- `/tmp/run_case3_ollama.py` — Case 3（Ollama）测试脚本
+- `/tmp/run_case1.py` 的核心逻辑（Case 2/3 修改端口和 endpoint 即可）：
+
+```python
+# 3 phases × 3 IOLengths，每 phase: 3 cold / 3 cached / 5 steady runs
+# IOLength configs:
+#   Translation  (400/400)  — max_tokens=450
+#   Generation   (200/2000) — max_tokens=300
+#   Summarization(2000/200) — max_tokens=250
+```
+
+### 结果汇总
+
+| IO Config | Phase | vLLM TurboQuant | vLLM fp8 | Ollama |
+|---|---|---|---|---|
+| **Translation** | Cold | 5,319ms / 14.9 tok/s | **2,926ms** / 23.4 tok/s | 3,894ms / 18.1 tok/s |
+| | Steady | 8,960ms / 7.6 tok/s | **3,124ms** / 23.4 tok/s | 7,430ms / 9.2 tok/s |
+| **Generation** | Cold | 56,181ms / 5.2 tok/s | **12,872ms** / 23.3 tok/s | 33,121ms / 5.6 tok/s |
+| | Steady | 61,059ms / 4.9 tok/s | **28,886ms** / 9.0 tok/s | 36,485ms / 5.5 tok/s |
+| **Summarization** | Cold | 23,271ms / 5.5 tok/s | **11,885ms** / 10.8 tok/s | 21,366ms / 5.5 tok/s |
+| | Steady | 24,405ms / 4.9 tok/s | **14,631ms** / 8.7 tok/s | 22,714ms / 5.5 tok/s |
+| **GPU Memory** | — | 19,482 MiB | 19,158 MiB | **5,456 MiB** |
+
+**核心发现：**
+- **vLLM fp8 全面最快**，冷启动延迟比 TurboQuant 低 2-5×
+- **TurboQuant k8v4 在长输出任务上反而最慢**，KV 量化开销大于收益（这个 8B 模型上）
+- **Ollama GPU 占用最低**（5.5GB），适合显存受限场景
+
+---
+
+## Running the Benchmark（Old）
 
 ```bash
 # Start vLLM TurboQuant and run all 3 phases
