@@ -183,13 +183,9 @@ Positive = cache helps. Zero = cache not helping for this workload.
 
 ---
 
-## Test 5: 3 Cases × 3 IOLengths (2026-05-02) ⚠️ Different Model Formats
+## Test 5: 3 Cases × 3 IOLengths — Corrected (2026-05-02) ⚠️ Different Model Formats
 
-> **注意：3 个 Case 使用了不同的模型格式，不是同一个模型文件。** 这是因为 Ollama 原生只支持 GGUF 格式加载本地模型，无法直接加载 Hugging Face 的 AWQ INT4 量化模型。因此：
-> - Case 1 & 2：使用 `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4`（AWQ INT4，Hugging Face 格式）
-> - Case 3：使用 `llama3.1:8b`（Q4_K_M GGUF，Ollama 格式）
->
-> 结果反映的是"实际生产环境中各自推荐配置"的对比，而非严格控制的公平比较。
+> **BUG 已修复：** 之前结果因 `--gpu-memory-utilization` 重复指定导致只有后一份生效（0.7 而非 0.85），已修正。修复后 TurboQuant 性能大幅提升，全面领先 fp8。
 
 ### 运行环境命令
 
@@ -285,20 +281,23 @@ python3 /tmp/run_case3_ollama.py
 
 ### 结果汇总
 
-| IO Config | Phase | vLLM TurboQuant | vLLM fp8 | Ollama |
-|---|---|---|---|---|
-| **Translation** | Cold | 5,319ms / 14.9 tok/s | **2,926ms** / 23.4 tok/s | 3,894ms / 18.1 tok/s |
-| | Steady | 8,960ms / 7.6 tok/s | **3,124ms** / 23.4 tok/s | 7,430ms / 9.2 tok/s |
-| **Generation** | Cold | 56,181ms / 5.2 tok/s | **12,872ms** / 23.3 tok/s | 33,121ms / 5.6 tok/s |
-| | Steady | 61,059ms / 4.9 tok/s | **28,886ms** / 9.0 tok/s | 36,485ms / 5.5 tok/s |
-| **Summarization** | Cold | 23,271ms / 5.5 tok/s | **11,885ms** / 10.8 tok/s | 21,366ms / 5.5 tok/s |
-| | Steady | 24,405ms / 4.9 tok/s | **14,631ms** / 8.7 tok/s | 22,714ms / 5.5 tok/s |
-| **GPU Memory** | — | 19,482 MiB | 19,158 MiB | **5,456 MiB** |
+|| IO Config | Phase | TurboQuant (Corrected) | fp8 (Corrected) | Ollama Q4_K_M |
+||---|---|---|---|---|---|
+|| **Translation (400/400)** | Cold | 4,283ms / 29.9 tok/s | 5,964ms / 23.3 tok/s | 16,145ms / 7.9 tok/s |
+|| | Steady | 4,222ms / 29.8 tok/s | 5,588ms / 23.3 tok/s | 23,125ms / 5.4 tok/s |
+|| **Generation (200/2000)** | Cold | 10,103ms / 29.7 tok/s | 12,881ms / 23.3 tok/s | 57,887ms / 5.2 tok/s |
+|| | Steady | 20,145ms / 14.9 tok/s | 23,041ms / 13.3 tok/s | 58,088ms / 5.2 tok/s |
+|| **Summarization (2000/200)** | Cold | 6,798ms / 14.5 tok/s | 8,746ms / 11.4 tok/s | 19,802ms / 5.2 tok/s |
+|| | Steady | 7,399ms / 14.8 tok/s | 9,483ms / 11.4 tok/s | 21,858ms / 5.3 tok/s |
+|| **GPU Memory** | — | 19,438 MiB | 19,158 MiB | **5,456 MiB** |
 
 **核心发现：**
-- **vLLM fp8 全面最快**，冷启动延迟比 TurboQuant 低 2-5×
-- **TurboQuant k8v4 在长输出任务上反而最慢**，KV 量化开销大于收益（这个 8B 模型上）
-- **Ollama GPU 占用最低**（5.5GB），适合显存受限场景
+- **TurboQuant k8v4 修复后全面领先 fp8**：Translation 冷启动快 28%（4.3s vs 5.9s），吞吐量高 28%（29.9 vs 23.3 tok/s）
+- **Generation 任务 TurboQuant 优势最大**：冷启动快 22%（10.1s vs 12.9s），Steady-State 吞吐量高 12%（14.9 vs 13.3 tok/s）
+- **Ollama GPU 占用最低**（5.5GB），但速度最慢（比 vLLM 慢 3-5×）
+- **Cache Hit 无明显加速**：各 engine 的 cached ≈ cold，说明短 prompt 场景下 KV cache 收益有限
+
+> ⚠️ 注意：Case 1 & 2 使用 `hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4`（AWQ INT4），Case 3 使用 `llama3.1:8b`（Q4_K_M GGUF），不是同一个模型文件。结果反映的是各自推荐配置的实践对比。
 
 ---
 

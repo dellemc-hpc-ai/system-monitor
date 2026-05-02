@@ -1,0 +1,47 @@
+
+  === Translation (400/400) (max_tok=450) ===
+    Warmup: 5,849ms  14.9 tok/s
+    Cold 1: 4,707ms  14.9 tok/s
+    Cold 2: 4,707ms  14.9 tok/s
+    Cold 3: 6,541ms  14.7 tok/s
+    Cached 1: 6,104ms  11.1 tok/s
+    Cached 2: 8,228ms  8.1 tok/s
+    Cached 3: 9,186ms  7.6 tok/s
+    Steady 1: 8,956ms  7.6 tok/s
+    Steady 2: 8,954ms  7.6 tok/s
+    Steady 3: 8,822ms  7.6 tok/s
+    Steady 4: 8,954ms  7.6 tok/s
+    Steady 5: 9,114ms  7.6 tok/s
+  => Cold:5319ms  Cached:7839ms  Steady:8960ms  GPU:19482MiB
+
+  === Generation (200/2000) (max_tok=300) ===
+    Warmup: 52,521ms  5.7 tok/s
+    Cold 1: 54,001ms  5.6 tok/s
+    Cold 2: 57,294ms  5.2 tok/s
+    Cold 3: 57,249ms  5.2 tok/s
+    Cached 1: 60,515ms  5.0 tok/s
+    Cached 2: 60,572ms  5.0 tok/s
+    Cached 3: 60,677ms  4.9 tok/s
+    Steady 1: 60,828ms  4.9 tok/s
+    Steady 2: 60,773ms  4.9 tok/s
+    Steady 3: 61,295ms  4.9 tok/s
+    Steady 4: 61,307ms  4.9 tok/s
+    Steady 5: 61,093ms  4.9 tok/s
+  => Cold:56181ms  Cached:60588ms  Steady:61059ms  GPU:19482MiB
+
+  === Summarization (2000/200) (max_tok=250) ===
+    Warmup: 21,948ms  4.9 tok/s
+    Cold 1: 21,218ms  6.0 tok/s
+    Cold 2: 25,282ms  5.5 tok/s
+    Cold 3: 23,314ms  5.5 tok/s
+    Cached 1: 22,930ms  4.9 tok/s
+    Cached 2: 24,786ms  4.9 tok/s
+    Cached 3: 25,261ms  4.9 tok/s
+    Steady 1: 26,561ms  4.9 tok/s
+    Steady 2: 20,939ms  4.9 tok/s
+    Steady 3: 25,311ms  4.9 tok/s
+    Steady 4: 23,147ms  4.9 tok/s
+    Steady 5: 26,068ms  4.9 tok/s
+  => Cold:23271ms  Cached:24326ms  Steady:24405ms  GPU:19482MiB
+
+Case 1 done
