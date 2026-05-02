@@ -1,6 +1,6 @@
 # vLLM vs Ollama Benchmark
 
-**GPU:** NVIDIA L4 22 GiB | **Model:** Meta-Llama-3.1-8B-Instruct (AWQ INT4 for vLLM, Q4_K_M GGUF for Ollama)
+**GPU:** NVIDIA L4 22 GiB | **Models:** Meta-Llama-3.1-8B-Instruct (AWQ INT4 for vLLM, Q4_K_M GGUF for Ollama) **AND** Qwen2.5-0.5B-Instruct (same GGUF file for both engines — fair comparison)
 
 ## Results Summary
 
@@ -38,6 +38,27 @@ Previous benchmarks ran requests back-to-back without purging cache. This mixes 
 
 - **Old mixed benchmark:** "Mean latency 16,000 ms" — is this cold? cached? steady-state?
 - **3-phase benchmark:** "Cold 5,165ms, Cache 5,255ms, Steady 10,809ms" — each number means something specific.
+
+## Fair Comparison: Same Model (Qwen2.5-0.5B Q4_K_M GGUF)
+
+> ⚠️ **Important caveat:** The Llama 3.1 8B results above compare *different model formats* (AWQ INT4 vs GGUF Q4_K_M), making direct engine performance comparisons unreliable. The following test uses the **exact same GGUF file** loaded by both engines.
+
+**Setup:** Downloaded `Qwen/Qwen2.5-0.5B-Instruct-GGUF` Q4_K_M to `/tmp/qwen_gguf/qwen2.5-0.5b-instruct-q4_k_m.gguf` (469 MB). vLLM loaded it via `--load-format gguf` on port 8001; Ollama imported it as `qwen2.5:0.5b-q4_k_m` on port 11434.
+
+|| Metric | vLLM GGUF | Ollama GGUF |
+||---|---|---|
+|| **GPU Memory** | 6.9 GB | 5.5 GB |
+|| **Cold start latency** | 501 ms | 1,079 ms (Run 1 = 3,867ms) |
+|| **Cached latency** | 496 ms | 425 ms |
+|| **Steady-state latency** | 496 ms | 448 ms |
+|| **Cold throughput** | 199,650 tok/s | 214,740 tok/s |
+|| **Steady throughput** | 201,731 tok/s | 223,865 tok/s |
+
+**Key observations:**
+- Ollama is ~10% faster in steady-state (223K vs 201K tok/s) for this small model
+- vLLM has consistent latency across all phases (no cache benefit, no degradation)
+- Ollama's first-ever request takes 3.9s (model initialization), but subsequent requests are ~380ms
+- **This 0.5B model saturates L4 bandwidth easily — results may not reflect behavior at 8B+ scale**
 
 ## Key Findings
 

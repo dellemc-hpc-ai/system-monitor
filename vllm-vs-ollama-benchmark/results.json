@@ -1,15 +1,14 @@
 {
-  "generated": "May 1, 2026 22:00",
+  "generated": "May 2, 2026 02:30",
   "gpu": "NVIDIA L4 22 GiB",
-  "model_vllm": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
-  "model_ollama": "llama3.1:8b Q4_K_M GGUF",
-  "prompt": "Explain the difference between a neural network and a deep learning model in detail.",
   "max_tokens": 256,
   "temperature": 0.7,
+  "prompt": "Explain the difference between a neural network and a deep learning model in detail.",
   "scenarios": [
     {
       "name": "vLLM + TurboQuant",
       "key": "vllm_turboquant",
+      "model": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
       "gpu_memory_mib": 19900,
       "phases": {
         "cold": {
@@ -37,6 +36,7 @@
     {
       "name": "vLLM (fp8, no TurboQuant)",
       "key": "vllm_no_turbo",
+      "model": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4 (fp8)",
       "gpu_memory_mib": 20300,
       "phases": {
         "cold": {
@@ -64,6 +64,7 @@
     {
       "name": "Ollama (Q4_K_M GGUF)",
       "key": "ollama",
+      "model": "llama3.1:8b Q4_K_M GGUF",
       "gpu_memory_mib": 5454,
       "phases": {
         "cold": {
@@ -88,5 +89,40 @@
       "cache_speedup_pct": -1,
       "steady_degradation_pct": 2
     }
-  ]
+  ],
+  "fair_comparison": {
+    "note": "Same model + same quantization: Qwen2.5-0.5B-Instruct Q4_K_M GGUF (both engines load identical file)",
+    "model": "Qwen/Qwen2.5-0.5B-Instruct-GGUF (Q4_K_M)",
+    "gpu": "NVIDIA L4 22 GiB",
+    "max_tokens": 100,
+    "scenarios": [
+      {
+        "name": "vLLM GGUF",
+        "key": "vllm_qwen05",
+        "gpu_memory_mib": 6879,
+        "cold_ms": 501,
+        "cold_tps": 199650,
+        "cached_ms": 496,
+        "cached_tps": 201455,
+        "steady_ms": 496,
+        "steady_tps": 201731,
+        "cache_speedup_pct": -1,
+        "steady_degradation_pct": 0
+      },
+      {
+        "name": "Ollama GGUF",
+        "key": "ollama_qwen05",
+        "gpu_memory_mib": 5454,
+        "cold_ms": 1079,
+        "cold_tps": 214740,
+        "cached_ms": 425,
+        "cached_tps": 235597,
+        "steady_ms": 448,
+        "steady_tps": 223865,
+        "cache_speedup_pct": 61,
+        "steady_degradation_pct": 2,
+        "note": "Ollama 'cold' Run 1 = 3867ms (first-ever request), Runs 2-5 = ~380ms. True steady-state is ~380ms."
+      }
+    ]
+  }
 }
