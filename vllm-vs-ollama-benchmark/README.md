@@ -8,6 +8,7 @@
 
 | Date | Test | Models Compared | Fair? |
 |---|---|---|---|
+| 2026-05-02 | [Long Context 7k/8k (Ollama tuned vs vLLM)](#test-6-long-context-7k-input-8k-output--2026-05-02) | Ollama tuned vs vLLM TurboQuant vs fp8 | ⚠️ Different formats |
 | 2026-05-02 | [Llama 3.1 8B GGUF Fair](#test-4-llama-31-8b-gguf-same-file-both-engines) | Llama 3.1 8B Q4_K_M GGUF (identical file) | ✅ Yes |
 | 2026-05-02 | [Qwen2.5-0.5B GGUF Fair](#test-3-qwen25-05b-same-gguf-both-engines) | Qwen2.5-0.5B Q4_K_M GGUF (identical file) | ✅ Yes |
 | 2026-05-01 | [3-Phase: Llama 3.1 8B (different formats)](#test-1--2-llama-31-8b-3-phase-different-formats) | Llama 3.1 8B (AWQ INT4 vs Q4_K_M GGUF) | ❌ Different formats |
@@ -322,6 +323,28 @@ Environment="OLLAMA_MAX_GPU_MEMORY=12G"
 | `OLLAMA_FLASH_ATTENTION=1` | 启用 Flash Attention 2 | 降低注意力计算复杂度 O(N²)→O(N) |
 | `OLLAMA_KV_CACHE_TYPE=q8_0` | KV cache 8bit 量化 | 大幅减少内存带宽占用 |
 | `OLLAMA_MAX_GPU_MEMORY=12G` | 限制 GPU 显存使用 | 留空间给 KV cache |
+
+---
+
+## Test 6: Long Context (7k Input / 8k Output) — 2026-05-02
+
+> 长上下文压力测试。输入约 7000 tokens，max_tokens=8000，vLLM `max_model_len=16384`（input+output≤16384）。
+> vLLM `gpu-memory-utilization=0.65`（22GB×0.65=14.3GB，L4 剩余空间限制）。
+
+### 结果
+
+|| Engine | Cold | Cached | Steady | GPU |
+||---|---|---|---|---|
+|| **Ollama + Tuned** | 4.8s / **35.7 tok/s** | 9.0s | 15.0s / **14.2 tok/s** | 6,142 MiB |
+|| **vLLM + TurboQuant** | 39.3s / 10.0 tok/s | 26.5s | 71.7s / 5.5 tok/s | 15,138 MiB |
+|| **vLLM + fp8** | 29.0s / 11.0 tok/s | 48.4s | 64.2s / 7.0 tok/s | 14,620 MiB |
+
+### 关键发现
+
+- **Ollama 调优版全面胜出**：冷启动快 6-8×（4.8s vs 29-39s），吞吐量高 3-5×
+- **TurboQuant 在长上下文中反而最慢**：KV 量化压缩率在长序列时可能产生额外开销
+- **Cache Hit 反而更慢**（Ollama 9s vs Cold 4.8s）：长上下文 KV cache 重复加载开销超过收益
+- **vLLM 占用 GPU 14-15GB**，Ollama 仅需 6GB，Ollama 内存效率高出 60%
 
 ---
 

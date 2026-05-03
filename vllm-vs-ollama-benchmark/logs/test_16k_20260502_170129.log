@@ -1,0 +1,123 @@
+
+============================================================
+  CASE: Ollama + Tuned (GPU_layers/Flash/KV_q8_0)
+============================================================
+
+  Warmup (short prompt)...
+
+  ── Long Context (16k/16k) (ISL≈16000, OSL=16000) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 14.8s  |  19.6 tok/s  |  ~290 tokens
+    Run 2: 11.9s  |  35.1 tok/s  |  ~419 tokens
+    Run 3: 6.2s  |  34.6 tok/s  |  ~216 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 3.6s  |  34.0 tok/s  |  ~123 tokens
+    Run 2: 9.9s  |  33.7 tok/s  |  ~335 tokens
+    Run 3: 8.8s  |  33.0 tok/s  |  ~291 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 7.0s  |  32.7 tok/s  |  ~229 tokens
+    Run 2: 6.1s  |  32.2 tok/s  |  ~196 tokens
+    Run 3: 12.3s  |  23.1 tok/s  |  ~285 tokens
+
+  Case done: ollama_tuned
+
+============================================================
+  CASE: vLLM + TurboQuant k8v4
+============================================================
+  Starting container, waiting for model load...
+  ...loading (0s)
+  ...loading (5s)
+  ...loading (10s)
+  ...loading (15s)
+  ...loading (20s)
+  ...loading (25s)
+  ...loading (30s)
+  ...loading (35s)
+  ...loading (40s)
+  ...loading (45s)
+  ...loading (50s)
+  ...loading (55s)
+  ...loading (60s)
+  ...loading (65s)
+  ...loading (70s)
+  ...loading (75s)
+  ...loading (80s)
+  ...loading (85s)
+  ...loading (90s)
+  ...loading (95s)
+  ...loading (100s)
+  ...loading (105s)
+  ...loading (110s)
+  ...loading (115s)
+  ...loading (120s)
+  ...loading (125s)
+  ...loading (130s)
+  ...loading (135s)
+  ...loading (140s)
+  ...loading (145s)
+  ...loading (150s)
+  ...loading (155s)
+  ...loading (160s)
+  ...loading (165s)
+  ...loading (170s)
+  ...loading (175s)
+  FAILED: health check failed
+
+============================================================
+  CASE: vLLM + fp8
+============================================================
+  Starting container, waiting for model load...
+  ...loading (0s)
+  ...loading (5s)
+  ...loading (10s)
+  ...loading (15s)
+  ...loading (20s)
+  ...loading (25s)
+  ...loading (30s)
+  ...loading (35s)
+  ...loading (40s)
+  ...loading (45s)
+  ...loading (50s)
+  ...loading (55s)
+  ...loading (60s)
+  ...loading (65s)
+  ...loading (70s)
+  ...loading (75s)
+  ...loading (80s)
+  ...loading (85s)
+  ...loading (90s)
+  ...loading (95s)
+  ...loading (100s)
+  ...loading (105s)
+  ...loading (110s)
+  ...loading (115s)
+  ...loading (120s)
+  ...loading (125s)
+  ...loading (130s)
+  ...loading (135s)
+  ...loading (140s)
+  ...loading (145s)
+  ...loading (150s)
+  ...loading (155s)
+  ...loading (160s)
+  ...loading (165s)
+  ...loading (170s)
+  ...loading (175s)
+  FAILED: health check failed
+
+
+============================================================
+  SUMMARY (16k Input / 16k Output)
+============================================================
+
+  Ollama + Tuned (GPU_layers/Flash/KV_q8_0):
+    Long Context (16k/16k):
+      Cold:    11.0s / 29.8 tok/s
+      Cached:  7.5s
+      Steady:  8.5s / 29.3 tok/s
+      GPU: 6142 MiB
+  vLLM + TurboQuant k8v4: FAILED — health check failed
+  vLLM + fp8: FAILED — health check failed
+
+
+Results saved to results_16k.json
