@@ -218,8 +218,7 @@ async function refresh() {
 }
 
 initCharts();
-refresh();
-setInterval(refresh, 10000);
+refresh().then(() => setInterval(refresh, 10000));
 </script>
 </body>
 </html>
