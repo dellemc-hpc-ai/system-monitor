@@ -199,15 +199,19 @@ async function refresh() {
     document.getElementById('gpu-mem-stat-card').style.opacity = '0.4';
   }
 
-  function buildDataset(key, gpuKey) {
+  function buildDataset(key, gpuKey, asPercent) {
     return allData.filter(d => gpuKey ? (d.gpu && !d.gpu.error) : true)
-      .map(d => ({ x: new Date(d.timestamp), y: gpuKey ? d.gpu[gpuKey] : d[key] }));
+      .map(d => {
+        let y = gpuKey ? d.gpu[gpuKey] : d[key];
+        if (asPercent) y = d.gpu.memory_total_mb > 0 ? y / d.gpu.memory_total_mb * 100 : 0;
+        return { x: new Date(d.timestamp), y };
+      });
   }
 
   charts.cpu.data.datasets[0].data = buildDataset('cpu_percent', null);
   charts.mem.data.datasets[0].data = buildDataset('memory_percent', null);
   charts.gpu.data.datasets[0].data = buildDataset(null, 'utilization');
-  charts['gpu-mem'].data.datasets[0].data = buildDataset(null, 'memory_used_mb');
+  charts['gpu-mem'].data.datasets[0].data = buildDataset(null, 'memory_used_mb', true);
 
   Object.values(charts).forEach(c => c.update());
   document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString() + ' | ' + allData.length + ' data points';
