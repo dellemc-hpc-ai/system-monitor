@@ -1,0 +1,205 @@
+
+============================================================
+  CASE: vLLM + TurboQuant k8v4
+============================================================
+
+  Starting vLLM container...
+  Container started, waiting for model load...
+  ...still loading (0s)
+  ...still loading (5s)
+  ...still loading (10s)
+  ...still loading (15s)
+  ...still loading (20s)
+  ...still loading (25s)
+  ✓ Ready on port 8000
+
+  Warmup (1 request)...
+
+  ── IO: Translation (400/400) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 4,448ms  |  29.9 tok/s  |  ~133 tokens
+    Run 2: 4,316ms  |  29.9 tok/s  |  ~129 tokens
+    Run 3: 4,085ms  |  29.9 tok/s  |  ~122 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 4,322ms  |  29.8 tok/s  |  ~129 tokens
+    Run 2: 4,458ms  |  29.8 tok/s  |  ~133 tokens
+    Run 3: 4,595ms  |  29.8 tok/s  |  ~137 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 4,264ms  |  29.8 tok/s  |  ~127 tokens
+    Run 2: 4,200ms  |  29.8 tok/s  |  ~125 tokens
+    Run 3: 4,202ms  |  29.8 tok/s  |  ~125 tokens
+
+  ── IO: Generation (200/2000) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 10,087ms  |  29.7 tok/s  |  ~300 tokens
+    Run 2: 10,101ms  |  29.7 tok/s  |  ~300 tokens
+    Run 3: 10,121ms  |  29.6 tok/s  |  ~300 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 10,144ms  |  29.6 tok/s  |  ~300 tokens
+    Run 2: 11,959ms  |  25.1 tok/s  |  ~300 tokens
+    Run 3: 18,804ms  |  16.0 tok/s  |  ~300 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 20,111ms  |  14.9 tok/s  |  ~300 tokens
+    Run 2: 20,159ms  |  14.9 tok/s  |  ~300 tokens
+    Run 3: 20,163ms  |  14.9 tok/s  |  ~300 tokens
+
+  ── IO: Summarization (2000/200) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 7,338ms  |  13.9 tok/s  |  ~102 tokens
+    Run 2: 6,224ms  |  14.8 tok/s  |  ~92 tokens
+    Run 3: 6,834ms  |  14.8 tok/s  |  ~101 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 7,173ms  |  14.8 tok/s  |  ~106 tokens
+    Run 2: 7,105ms  |  14.8 tok/s  |  ~105 tokens
+    Run 3: 7,444ms  |  14.8 tok/s  |  ~110 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 7,511ms  |  14.8 tok/s  |  ~111 tokens
+    Run 2: 7,716ms  |  14.8 tok/s  |  ~114 tokens
+    Run 3: 6,970ms  |  14.8 tok/s  |  ~103 tokens
+
+  Container stopped and removed.
+
+  Case done: vllm_turboquant
+
+============================================================
+  CASE: vLLM + fp8
+============================================================
+
+  Starting vLLM container...
+  Container started, waiting for model load...
+  ...still loading (0s)
+  ...still loading (5s)
+  ...still loading (10s)
+  ...still loading (15s)
+  ...still loading (20s)
+  ...still loading (25s)
+  ...still loading (30s)
+  ...still loading (35s)
+  ...still loading (40s)
+  ...still loading (45s)
+  ...still loading (50s)
+  ...still loading (55s)
+  ...still loading (60s)
+  ...still loading (65s)
+  ✓ Ready on port 8001
+
+  Warmup (1 request)...
+
+  ── IO: Translation (400/400) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 5,964ms  |  23.3 tok/s  |  ~139 tokens
+    Run 2: 6,007ms  |  23.3 tok/s  |  ~140 tokens
+    Run 3: 5,920ms  |  23.3 tok/s  |  ~138 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 4,622ms  |  23.4 tok/s  |  ~108 tokens
+    Run 2: 5,487ms  |  23.3 tok/s  |  ~128 tokens
+    Run 3: 5,791ms  |  23.3 tok/s  |  ~135 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 5,313ms  |  23.3 tok/s  |  ~124 tokens
+    Run 2: 5,487ms  |  23.3 tok/s  |  ~128 tokens
+    Run 3: 5,963ms  |  23.3 tok/s  |  ~139 tokens
+
+  ── IO: Generation (200/2000) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 12,908ms  |  23.2 tok/s  |  ~300 tokens
+    Run 2: 12,867ms  |  23.3 tok/s  |  ~300 tokens
+    Run 3: 12,868ms  |  23.3 tok/s  |  ~300 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 12,867ms  |  23.3 tok/s  |  ~300 tokens
+    Run 2: 12,869ms  |  23.3 tok/s  |  ~300 tokens
+    Run 3: 12,989ms  |  23.1 tok/s  |  ~300 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 18,320ms  |  16.4 tok/s  |  ~300 tokens
+    Run 2: 25,181ms  |  11.9 tok/s  |  ~300 tokens
+    Run 3: 25,622ms  |  11.7 tok/s  |  ~300 tokens
+
+  ── IO: Summarization (2000/200) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 8,606ms  |  10.8 tok/s  |  ~93 tokens
+    Run 2: 8,602ms  |  11.6 tok/s  |  ~100 tokens
+    Run 3: 9,032ms  |  11.6 tok/s  |  ~105 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 9,983ms  |  11.6 tok/s  |  ~116 tokens
+    Run 2: 10,241ms  |  11.6 tok/s  |  ~119 tokens
+    Run 3: 9,898ms  |  11.6 tok/s  |  ~115 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 8,600ms  |  11.6 tok/s  |  ~100 tokens
+    Run 2: 9,293ms  |  11.6 tok/s  |  ~108 tokens
+    Run 3: 10,556ms  |  11.1 tok/s  |  ~117 tokens
+
+  Container stopped and removed.
+
+  Case done: vllm_fp8
+
+============================================================
+  CASE: Ollama + Q4_K_M GGUF
+============================================================
+
+  Warmup (1 request)...
+
+  ── IO: Translation (400/400) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 12,621ms  |  9.3 tok/s  |  ~117 tokens
+    Run 2: 14,386ms  |  8.2 tok/s  |  ~118 tokens
+    Run 3: 21,427ms  |  6.2 tok/s  |  ~132 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 21,198ms  |  5.9 tok/s  |  ~125 tokens
+    Run 2: 23,272ms  |  5.4 tok/s  |  ~126 tokens
+    Run 3: 27,470ms  |  5.2 tok/s  |  ~144 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 21,902ms  |  5.6 tok/s  |  ~123 tokens
+    Run 2: 23,270ms  |  5.2 tok/s  |  ~122 tokens
+    Run 3: 24,203ms  |  5.3 tok/s  |  ~128 tokens
+
+  ── IO: Generation (200/2000) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 57,793ms  |  5.2 tok/s  |  ~300 tokens
+    Run 2: 58,062ms  |  5.2 tok/s  |  ~300 tokens
+    Run 3: 57,804ms  |  5.2 tok/s  |  ~300 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 56,686ms  |  5.3 tok/s  |  ~300 tokens
+    Run 2: 58,076ms  |  5.2 tok/s  |  ~300 tokens
+    Run 3: 58,503ms  |  5.1 tok/s  |  ~300 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 56,822ms  |  5.3 tok/s  |  ~300 tokens
+    Run 2: 58,764ms  |  5.1 tok/s  |  ~300 tokens
+    Run 3: 58,677ms  |  5.1 tok/s  |  ~300 tokens
+
+  ── IO: Summarization (2000/200) ──
+  [Cold Start] (3 runs, purge before each)
+    Run 1: 20,001ms  |  5.1 tok/s  |  ~102 tokens
+    Run 2: 18,801ms  |  5.3 tok/s  |  ~99 tokens
+    Run 3: 20,604ms  |  5.2 tok/s  |  ~107 tokens
+  [Cache Hit] (3 runs, same prompt)
+    Run 1: 17,341ms  |  5.6 tok/s  |  ~97 tokens
+    Run 2: 19,955ms  |  5.3 tok/s  |  ~105 tokens
+    Run 3: 21,916ms  |  5.2 tok/s  |  ~114 tokens
+  [Steady-State] (3 runs, burst)
+    Run 1: 19,149ms  |  5.5 tok/s  |  ~106 tokens
+    Run 2: 23,220ms  |  5.2 tok/s  |  ~120 tokens
+    Run 3: 23,205ms  |  5.2 tok/s  |  ~120 tokens
+
+  Case done: ollama
+
+
+============================================================
+  SUMMARY
+============================================================
+
+  vLLM + TurboQuant k8v4:
+    Translation (400/400): Cold=4283ms/29.9 tok/s  |  Cached=4458ms  |  Steady=4222ms/29.8 tok/s  |  GPU: 19438MiB
+    Generation (200/2000): Cold=10103ms/29.7 tok/s  |  Cached=13636ms  |  Steady=20145ms/14.9 tok/s  |  GPU: 19438MiB
+    Summarization (2000/200): Cold=6798ms/14.5 tok/s  |  Cached=7241ms  |  Steady=7399ms/14.8 tok/s  |  GPU: 19438MiB
+
+  vLLM + fp8:
+    Translation (400/400): Cold=5964ms/23.3 tok/s  |  Cached=5300ms  |  Steady=5588ms/23.3 tok/s  |  GPU: 19158MiB
+    Generation (200/2000): Cold=12881ms/23.3 tok/s  |  Cached=12908ms  |  Steady=23041ms/13.3 tok/s  |  GPU: 19158MiB
+    Summarization (2000/200): Cold=8746ms/11.4 tok/s  |  Cached=10041ms  |  Steady=9483ms/11.4 tok/s  |  GPU: 19158MiB
+
+  Ollama + Q4_K_M GGUF:
+    Translation (400/400): Cold=16145ms/7.9 tok/s  |  Cached=23980ms  |  Steady=23125ms/5.4 tok/s  |  GPU: 5452MiB
+    Generation (200/2000): Cold=57887ms/5.2 tok/s  |  Cached=57755ms  |  Steady=58088ms/5.2 tok/s  |  GPU: 5454MiB
+    Summarization (2000/200): Cold=19802ms/5.2 tok/s  |  Cached=19737ms  |  Steady=21858ms/5.3 tok/s  |  GPU: 5456MiB
+
+
+Results saved to results_8b_3cases.json

@@ -1,0 +1,122 @@
+{
+  "cases": [
+    {
+      "case": "vllm_turboquant",
+      "results": [
+        {
+          "io_key": "trans",
+          "io_name": "Translation (400/400)",
+          "cold_lat": 5319.0,
+          "cold_tp": 14.9,
+          "cached_lat": 7839.0,
+          "cached_tp": 7.6,
+          "steady_lat": 8960.0,
+          "steady_tp": 7.6,
+          "gpu_mem": 19482.0
+        },
+        {
+          "io_key": "gen",
+          "io_name": "Generation (200/2000)",
+          "cold_lat": 56181.0,
+          "cold_tp": 5.2,
+          "cached_lat": 60588.0,
+          "cached_tp": 4.9,
+          "steady_lat": 61059.0,
+          "steady_tp": 4.9,
+          "gpu_mem": 19482.0
+        },
+        {
+          "io_key": "summ",
+          "io_name": "Summarization (2000/200)",
+          "cold_lat": 23271.0,
+          "cold_tp": 5.5,
+          "cached_lat": 24326.0,
+          "cached_tp": 4.9,
+          "steady_lat": 24405.0,
+          "steady_tp": 4.9,
+          "gpu_mem": 19482.0
+        }
+      ],
+      "ts": "2026-05-02T09:45:00"
+    },
+    {
+      "case": "vllm_fp8",
+      "results": [
+        {
+          "io_key": "trans",
+          "io_name": "Translation (400/400)",
+          "cold_lat": 2926.0,
+          "cold_tp": 23.4,
+          "cached_lat": 3296.0,
+          "cached_tp": 23.4,
+          "steady_lat": 3124.0,
+          "steady_tp": 23.4,
+          "gpu_mem": 19158.0
+        },
+        {
+          "io_key": "gen",
+          "io_name": "Generation (200/2000)",
+          "cold_lat": 12872.0,
+          "cold_tp": 23.3,
+          "cached_lat": 21101.0,
+          "cached_tp": 11.7,
+          "steady_lat": 28886.0,
+          "steady_tp": 9.0,
+          "gpu_mem": 19158.0
+        },
+        {
+          "io_key": "summ",
+          "io_name": "Summarization (2000/200)",
+          "cold_lat": 11885.0,
+          "cold_tp": 10.8,
+          "cached_lat": 14642.0,
+          "cached_tp": 8.8,
+          "steady_lat": 14631.0,
+          "steady_tp": 8.7,
+          "gpu_mem": 19158.0
+        }
+      ],
+      "ts": "2026-05-02T10:00:00"
+    },
+    {
+      "case": "ollama",
+      "results": [
+        {
+          "io_key": "trans",
+          "io_name": "Translation (400/400)",
+          "cold_lat": 3894.0,
+          "cold_tp": 18.1,
+          "cached_lat": 5190.0,
+          "cached_tp": 9.2,
+          "steady_lat": 7430.0,
+          "steady_tp": 9.2,
+          "gpu_mem": 5456.0
+        },
+        {
+          "io_key": "gen",
+          "io_name": "Generation (200/2000)",
+          "cold_lat": 33121.0,
+          "cold_tp": 5.6,
+          "cached_lat": 36028.0,
+          "cached_tp": 5.5,
+          "steady_lat": 36485.0,
+          "steady_tp": 5.5,
+          "gpu_mem": 5456.0
+        },
+        {
+          "io_key": "summ",
+          "io_name": "Summarization (2000/200)",
+          "cold_lat": 21366.0,
+          "cold_tp": 5.5,
+          "cached_lat": 21856.0,
+          "cached_tp": 5.5,
+          "steady_lat": 22714.0,
+          "steady_tp": 5.5,
+          "gpu_mem": 5456.0
+        }
+      ],
+      "ts": "2026-05-02T10:45:00"
+    }
+  ],
+  "generated": "2026-05-02 10:59"
+}

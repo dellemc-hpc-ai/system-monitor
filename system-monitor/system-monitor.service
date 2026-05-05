@@ -1,0 +1,16 @@
+[Unit]
+Description=Hermes System Monitor Collector
+After=network.target
+
+[Service]
+Type=simple
+User=frank
+WorkingDirectory=/home/frank/hermes/system-monitor
+ExecStart=/home/frank/.hermes/hermes-agent/venv/bin/python3 /home/frank/hermes/system-monitor/collector.py 10
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

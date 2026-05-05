@@ -1,0 +1,9 @@
+{
+  "case": "vllm_turboquant",
+  "results": [
+    {"io_key":"trans","io_name":"Translation (400/400)","cold_lat":5319.0,"cold_tp":14.9,"cached_lat":7839.0,"cached_tp":7.6,"steady_lat":8960.0,"steady_tp":7.6,"gpu_mem":19482.0},
+    {"io_key":"gen","io_name":"Generation (200/2000)","cold_lat":56181.0,"cold_tp":5.2,"cached_lat":60588.0,"cached_tp":4.9,"steady_lat":61059.0,"steady_tp":4.9,"gpu_mem":19482.0},
+    {"io_key":"summ","io_name":"Summarization (2000/200)","cold_lat":23271.0,"cold_tp":5.5,"cached_lat":24326.0,"cached_tp":4.9,"steady_lat":24405.0,"steady_tp":4.9,"gpu_mem":19482.0}
+  ],
+  "ts": "2026-05-02T09:45:00"
+}

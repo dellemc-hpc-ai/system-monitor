@@ -1,0 +1,82 @@
+============================================================
+  vLLM vs Ollama — 3 Cases × 3 IOLengths Benchmark
+============================================================
+
+============================================================
+  Case: vLLM + TurboQuant k8v4
+============================================================
+
+[Setup] Starting vLLM (vllm_turboquant) on port 8000 with model hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4...
+  Failed to start: permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+
+
+============================================================
+  Case: vLLM (fp8, no TurboQuant)
+============================================================
+
+[Setup] Starting vLLM (vllm_no_turbo) on port 8001 with model hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4...
+  Failed to start: permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+
+
+============================================================
+  Case: Ollama (Q4_K_M GGUF)
+============================================================
+
+  ── Translation (400/400) (ISL≈400, OSL=400) ──
+    Warmup (1 request)...
+    Cold Start (3 runs)...
+    [COLD] Run 1: 6,041ms  |  15.7 tok/s  |  ~95 tokens
+    [COLD] Run 2: 5,840ms  |  15.8 tok/s  |  ~92 tokens
+    [COLD] Run 3: 6,047ms  |  15.7 tok/s  |  ~95 tokens
+    Cache Hit (3 runs)...
+    [CACHED] Run 1: 6,303ms  |  15.5 tok/s  |  ~98 tokens
+    [CACHED] Run 2: 6,118ms  |  15.5 tok/s  |  ~95 tokens
+    [CACHED] Run 3: 5,954ms  |  15.5 tok/s  |  ~92 tokens
+    Steady-State Burst (5 runs)...
+    [STEADY] Run 1: 6,294ms  |  15.4 tok/s  |  ~97 tokens
+    [STEADY] Run 2: 6,083ms  |  15.6 tok/s  |  ~95 tokens
+    [STEADY] Run 3: 5,583ms  |  15.9 tok/s  |  ~89 tokens
+    [STEADY] Run 4: 6,686ms  |  15.1 tok/s  |  ~101 tokens
+    [STEADY] Run 5: 5,961ms  |  15.8 tok/s  |  ~94 tokens
+
+  ── Generation (200/2000) (ISL≈200, OSL=2000) ──
+    Warmup (1 request)...
+    Cold Start (3 runs)...
+    [COLD] Run 1: 78,431ms  |  14.8 tok/s  |  ~1159 tokens
+    [COLD] Run 2: 61,786ms  |  14.9 tok/s  |  ~923 tokens
+    [COLD] Run 3: 67,574ms  |  14.9 tok/s  |  ~1004 tokens
+    Cache Hit (3 runs)...
+    [CACHED] Run 1: 61,975ms  |  15.1 tok/s  |  ~938 tokens
+    [CACHED] Run 2: 80,201ms  |  15.1 tok/s  |  ~1210 tokens
+    [CACHED] Run 3: 90,078ms  |  14.7 tok/s  |  ~1321 tokens
+    Steady-State Burst (5 runs)...
+    [STEADY] Run 1: 72,071ms  |  15.0 tok/s  |  ~1084 tokens
+    [STEADY] Run 2: 87,398ms  |  14.8 tok/s  |  ~1293 tokens
+    [STEADY] Run 3: 98,035ms  |  14.8 tok/s  |  ~1453 tokens
+    [STEADY] Run 4: 64,107ms  |  14.9 tok/s  |  ~953 tokens
+    [STEADY] Run 5: 83,955ms  |  14.7 tok/s  |  ~1235 tokens
+
+  ── Summarization (2000/200) (ISL≈2000, OSL=200) ──
+    Warmup (1 request)...
+    Cold Start (3 runs)...
+    [COLD] Run 1: 6,524ms  |  15.5 tok/s  |  ~101 tokens
+    [COLD] Run 2: 8,080ms  |  15.3 tok/s  |  ~124 tokens
+    [COLD] Run 3: 8,273ms  |  15.2 tok/s  |  ~126 tokens
+    Cache Hit (3 runs)...
+    [CACHED] Run 1: 9,874ms  |  15.0 tok/s  |  ~148 tokens
+    [CACHED] Run 2: 8,048ms  |  15.4 tok/s  |  ~124 tokens
+    [CACHED] Run 3: 9,334ms  |  15.1 tok/s  |  ~141 tokens
+    Steady-State Burst (5 runs)...
+    [STEADY] Run 1: 8,902ms  |  14.9 tok/s  |  ~133 tokens
+    [STEADY] Run 2: 8,910ms  |  15.4 tok/s  |  ~137 tokens
+    [STEADY] Run 3: 9,069ms  |  15.4 tok/s  |  ~140 tokens
+    [STEADY] Run 4: 7,913ms  |  15.5 tok/s  |  ~123 tokens
+    [STEADY] Run 5: 7,912ms  |  15.5 tok/s  |  ~123 tokens
+
+  Report written to /home/frank/hermes/vllm-vs-ollama-benchmark/index.html
+  JSON saved to /home/frank/hermes/vllm-vs-ollama-benchmark/results.json
+
+============================================================
+  Benchmark complete!
+  Open: file:///home/frank/hermes/vllm-vs-ollama-benchmark/index.html
+============================================================

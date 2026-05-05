@@ -1,0 +1,201 @@
+
+==================================================
+  Testing: vllm_turboquant_70b
+==================================================
+  Waiting up to 3 min for model load...
+  ...still loading (0s)
+  ...still loading (5s)
+  ...still loading (10s)
+  ...still loading (15s)
+  ...still loading (20s)
+  ...still loading (25s)
+  ...still loading (30s)
+  ...still loading (35s)
+  ...still loading (40s)
+  ...still loading (45s)
+  ...still loading (50s)
+  ...still loading (55s)
+  ...still loading (60s)
+  ...still loading (65s)
+  ...still loading (70s)
+  ...still loading (75s)
+  ...still loading (80s)
+  ...still loading (85s)
+  ...still loading (90s)
+  ...still loading (95s)
+  ...still loading (100s)
+  ...still loading (105s)
+  ...still loading (110s)
+  ...still loading (115s)
+  ...still loading (120s)
+  ...still loading (125s)
+  ...still loading (130s)
+  ...still loading (135s)
+  ...still loading (140s)
+  ...still loading (145s)
+  ...still loading (150s)
+  ...still loading (155s)
+  ...still loading (160s)
+  ...still loading (165s)
+  ...still loading (170s)
+  ...still loading (175s)
+  FAILED: Timeout waiting for health
+  Result: OOM | Cold: Nonems | GPU: 14.0MiB
+
+==================================================
+  Testing: vllm_fp8_70b
+==================================================
+  Waiting up to 3 min for model load...
+  ...still loading (0s)
+  ...still loading (5s)
+  ...still loading (10s)
+  ...still loading (15s)
+  ...still loading (20s)
+  ...still loading (25s)
+  ...still loading (30s)
+  ...still loading (35s)
+  ...still loading (40s)
+  ...still loading (45s)
+  ...still loading (50s)
+  ...still loading (55s)
+  ...still loading (60s)
+  ...still loading (65s)
+  ...still loading (70s)
+  ...still loading (75s)
+  ...still loading (80s)
+  ...still loading (85s)
+  ...still loading (90s)
+  ...still loading (95s)
+  ...still loading (100s)
+  ...still loading (105s)
+  ...still loading (110s)
+  ...still loading (115s)
+  ...still loading (120s)
+  ...still loading (125s)
+  ...still loading (130s)
+  ...still loading (135s)
+  ...still loading (140s)
+  ...still loading (145s)
+  ...still loading (150s)
+  ...still loading (155s)
+  ...still loading (160s)
+  ...still loading (165s)
+  ...still loading (170s)
+  ...still loading (175s)
+  FAILED: Timeout waiting for health
+  Result: OOM | Cold: Nonems | GPU: 14.0MiB
+
+==================================================
+  Testing: ollama_70b
+==================================================
+  Model llama3.1:70b not found locally. Pulling...
+  Result: MODEL_NOT_AVAILABLE | Cold: Nonems | GPU: NoneMiB
+
+==================================================
+  Testing: vllm_turboquant_34b
+==================================================
+  Waiting up to 3 min for model load...
+  ...still loading (0s)
+  ...still loading (5s)
+  ...still loading (10s)
+  ...still loading (15s)
+  ...still loading (20s)
+  ...still loading (25s)
+  ...still loading (30s)
+  ...still loading (35s)
+  ...still loading (40s)
+  ...still loading (45s)
+  ...still loading (50s)
+  ...still loading (55s)
+  ...still loading (60s)
+  ...still loading (65s)
+  ...still loading (70s)
+  ...still loading (75s)
+  ...still loading (80s)
+  ...still loading (85s)
+  ...still loading (90s)
+  ...still loading (95s)
+  ...still loading (100s)
+  ...still loading (105s)
+  ...still loading (110s)
+  ...still loading (115s)
+  ...still loading (120s)
+  ...still loading (125s)
+  ...still loading (130s)
+  ...still loading (135s)
+  ...still loading (140s)
+  ...still loading (145s)
+  ...still loading (150s)
+  ...still loading (155s)
+  ...still loading (160s)
+  ...still loading (165s)
+  ...still loading (170s)
+  ...still loading (175s)
+  FAILED: Timeout waiting for health
+  Result: OOM | Cold: Nonems | GPU: 14.0MiB
+
+==================================================
+  Testing: vllm_fp8_34b
+==================================================
+  Waiting up to 3 min for model load...
+  ...still loading (0s)
+  ...still loading (5s)
+  ...still loading (10s)
+  ...still loading (15s)
+  ...still loading (20s)
+  ...still loading (25s)
+  ...still loading (30s)
+  ...still loading (35s)
+  ...still loading (40s)
+  ...still loading (45s)
+  ...still loading (50s)
+  ...still loading (55s)
+  ...still loading (60s)
+  ...still loading (65s)
+  ...still loading (70s)
+  ...still loading (75s)
+  ...still loading (80s)
+  ...still loading (85s)
+  ...still loading (90s)
+  ...still loading (95s)
+  ...still loading (100s)
+  ...still loading (105s)
+  ...still loading (110s)
+  ...still loading (115s)
+  ...still loading (120s)
+  ...still loading (125s)
+  ...still loading (130s)
+  ...still loading (135s)
+  ...still loading (140s)
+  ...still loading (145s)
+  ...still loading (150s)
+  ...still loading (155s)
+  ...still loading (160s)
+  ...still loading (165s)
+  ...still loading (170s)
+  ...still loading (175s)
+  FAILED: Timeout waiting for health
+  Result: OOM | Cold: Nonems | GPU: 14.0MiB
+
+==================================================
+  Testing: ollama_34b
+==================================================
+  Model llama3.1:34b not found locally. Pulling...
+  Result: MODEL_NOT_AVAILABLE | Cold: Nonems | GPU: NoneMiB
+
+
+============================================================
+  SUMMARY
+============================================================
+  vllm_turboquant_70b: OOM | lat=Nonems | tp=None tok/s | GPU: 14.0MiB
+    Error: WARNING 05-02 19:55:04 [argparse_utils.py:422] Found duplicate keys --gpu-memory-utilization
+  vllm_fp8_70b: OOM | lat=Nonems | tp=None tok/s | GPU: 14.0MiB
+    Error: WARNING 05-02 19:58:01 [argparse_utils.py:422] Found duplicate keys --gpu-memory-utilization
+  ollama_70b: MODEL_NOT_AVAILABLE | lat=Nonems | tp=None tok/s | GPU: NoneMiB
+    Error: Model llama3.1:70b not downloaded in Ollama
+  vllm_turboquant_34b: OOM | lat=Nonems | tp=None tok/s | GPU: 14.0MiB
+    Error: WARNING 05-02 20:01:02 [argparse_utils.py:422] Found duplicate keys --gpu-memory-utilization
+  vllm_fp8_34b: OOM | lat=Nonems | tp=None tok/s | GPU: 14.0MiB
+    Error: WARNING 05-02 20:04:02 [argparse_utils.py:422] Found duplicate keys --gpu-memory-utilization
+  ollama_34b: MODEL_NOT_AVAILABLE | lat=Nonems | tp=None tok/s | GPU: NoneMiB
+    Error: Model llama3.1:34b not downloaded in Ollama

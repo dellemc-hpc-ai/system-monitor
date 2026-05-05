@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>System Monitor</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f1117; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif; padding: 20px; }
+  h1 { font-size: 1.5rem; margin-bottom: 16px; color: #fff; }
+  .controls { margin-bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .controls label { font-size: 0.85rem; color: #aaa; }
+  .controls select, .controls button {
+    background: #1e2230; color: #e0e0e0; border: 1px solid #333;
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 0.85rem;
+  }
+  .controls select:hover, .controls button:hover { border-color: #555; }
+  .controls button.active { background: #2d6cdf; border-color: #2d6cdf; }
+  .controls button:hover { background: #383f5a; }
+  .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 16px; }
+  .chart-card { background: #1a1d27; border-radius: 12px; padding: 16px; border: 1px solid #252a3a; }
+  .chart-card h3 { font-size: 0.9rem; color: #aaa; margin-bottom: 12px; font-weight: 500; }
+  .chart-wrapper { position: relative; height: 220px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stat-card {
+    background: #1a1d27; border: 1px solid #252a3a; border-radius: 10px;
+    padding: 14px 18px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .stat-label { font-size: 0.75rem; color: #777; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 1.6rem; font-weight: 700; }
+  .stat-sub { font-size: 0.75rem; color: #555; }
+  .cpu-val { color: #4fc3f7; }
+  .mem-val { color: #ba68c8; }
+  .gpu-val { color: #81c784; }
+  .gpu-mem-val { color: #ffb74d; }
+  .updated { font-size: 0.75rem; color: #555; margin-top: 8px; }
+  .no-gpu { color: #666; font-style: italic; }
+  @media (max-width: 600px) {
+    .charts { grid-template-columns: 1fr; }
+    .stat-value { font-size: 1.3rem; }
+  }
+</style>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+</head>
+<body>
+
+<h1>🖥️ System Monitor</h1>
+
+<div class="stats" id="stats">
+  <div class="stat-card">
+    <span class="stat-label">CPU Usage</span>
+    <span class="stat-value cpu-val" id="s-cpu">--%</span>
+    <span class="stat-sub" id="s-cpu-sub">--</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-label">System Memory</span>
+    <span class="stat-value mem-val" id="s-mem">--%</span>
+    <span class="stat-sub" id="s-mem-sub">--</span>
+  </div>
+  <div class="stat-card" id="gpu-stat-card">
+    <span class="stat-label">GPU Usage</span>
+    <span class="stat-value gpu-val" id="s-gpu">--%</span>
+    <span class="stat-sub" id="s-gpu-sub">--</span>
+  </div>
+  <div class="stat-card" id="gpu-mem-stat-card">
+    <span class="stat-label">GPU Memory</span>
+    <span class="stat-value gpu-mem-val" id="s-gpu-mem">--%</span>
+    <span class="stat-sub" id="s-gpu-mem-sub">--</span>
+  </div>
+</div>
+
+<div class="controls">
+  <label>Time Range:</label>
+  <button id="btn-hour" class="active" onclick="setRange('hour')">Hour</button>
+  <button id="btn-day" onclick="setRange('day')">Day</button>
+  <button id="btn-week" onclick="setRange('week')">Week</button>
+  <button onclick="refresh()" style="margin-left:auto">🔄 Refresh</button>
+</div>
+
+<div class="charts">
+  <div class="chart-card">
+    <h3>CPU Usage (%)</h3>
+    <div class="chart-wrapper"><canvas id="chart-cpu"></canvas></div>
+  </div>
+  <div class="chart-card">
+    <h3>System Memory (%)</h3>
+    <div class="chart-wrapper"><canvas id="chart-mem"></canvas></div>
+  </div>
+  <div class="chart-card" id="gpu-chart-card">
+    <h3>GPU Usage (%)</h3>
+    <div class="chart-wrapper"><canvas id="chart-gpu"></canvas></div>
+  </div>
+  <div class="chart-card" id="gpu-mem-chart-card">
+    <h3>GPU Memory (%)</h3>
+    <div class="chart-wrapper"><canvas id="chart-gpu-mem"></canvas></div>
+  </div>
+</div>
+<p class="updated" id="updated"></p>
+
+<script>
+let range = 'hour';
+let charts = {};
+
+const chartOptions = (color) => ({
+  responsive: true, maintainAspectRatio: false,
+  animation: { duration: 300 },
+  scales: {
+    x: { type: 'time', time: { displayFormats: { hour: 'HH:mm', day: 'MM dd' } },
+      grid: { color: '#252a3a' }, ticks: { color: '#666', maxTicksLimit: 8 } },
+    y: { min: 0, max: 100, grid: { color: '#252a3a' }, ticks: { color: '#666' } }
+  },
+  plugins: { legend: { display: false } },
+  elements: { point: { radius: 0, hoverRadius: 4 }, line: { tension: 0.3 } }
+});
+
+function initCharts() {
+  ['cpu','mem','gpu','gpu-mem'].forEach(key => {
+    const colors = { cpu:'4fc3f7', mem:'ba68c8', gpu:'81c784', 'gpu-mem':'ffb74d' };
+    const ctx = document.getElementById('chart-' + key).getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 220);
+    grad.addColorStop(0, colors[key] + '55');
+    grad.addColorStop(1, colors[key] + '00');
+    charts[key] = new Chart(ctx, {
+      type: 'line',
+      data: { datasets: [{ data: [], borderColor: '#' + colors[key], backgroundColor: grad, fill: true, borderWidth: 2 }] },
+      options: chartOptions(colors[key])
+    });
+  });
+}
+
+function setRange(r) {
+  range = r;
+  ['btn-hour','btn-day','btn-week'].forEach(id => document.getElementById(id).classList.remove('active'));
+  document.getElementById('btn-' + r).classList.add('active');
+  refresh();
+}
+
+async function refresh() {
+  const now = Date.now();
+  let cutoff;
+  if (range === 'hour') cutoff = now - 3600 * 1000;
+  else if (range === 'day') cutoff = now - 86400 * 1000;
+  else cutoff = now - 7 * 86400 * 1000;
+
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const files = ['metrics_' + today + '.json'];
+
+  // For week view, also check yesterday if today has little data
+  if (range === 'week') {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10).replace(/-/g,'');
+    files.push('metrics_' + yesterday + '.json');
+  }
+
+  let allData = [];
+  for (const f of files) {
+    try {
+      const r = await fetch('data/' + f + '?t=' + now);
+      if (r.ok) {
+        const text = await r.text();
+        text.trim().split('\n').forEach(line => {
+          try { allData.push(JSON.parse(line)); } catch {}
+        });
+      }
+    } catch {}
+  }
+
+  allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
+  allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+
+  if (allData.length === 0) {
+    document.getElementById('updated').textContent = 'No data for this range. Collector may not be running.';
+    return;
+  }
+
+  const latest = allData[allData.length - 1];
+  document.getElementById('s-cpu').textContent = latest.cpu_percent.toFixed(1) + '%';
+  document.getElementById('s-cpu-sub').textContent = latest.cpu_percent.toFixed(1) + '%';
+
+  const memPct = latest.memory_percent.toFixed(1);
+  const memUsed = (latest.memory_used_mb / 1024).toFixed(1);
+  const memTotal = (latest.memory_total_mb / 1024).toFixed(1);
+  document.getElementById('s-mem').textContent = memPct + '%';
+  document.getElementById('s-mem-sub').textContent = memUsed + ' / ' + memTotal + ' GB';
+
+  if (latest.gpu && !latest.gpu.error) {
+    const gpuPct = latest.gpu.utilization.toFixed(1);
+    const gpuMemPct = (latest.gpu.memory_used_mb / latest.gpu.memory_total_mb * 100).toFixed(1);
+    const gpuMemUsed = (latest.gpu.memory_used_mb / 1024).toFixed(1);
+    const gpuMemTotal = (latest.gpu.memory_total_mb / 1024).toFixed(1);
+    document.getElementById('s-gpu').textContent = gpuPct + '%';
+    document.getElementById('s-gpu-sub').textContent = latest.gpu.utilization.toFixed(1) + '%';
+    document.getElementById('s-gpu-mem').textContent = gpuMemPct + '%';
+    document.getElementById('s-gpu-mem-sub').textContent = gpuMemUsed + ' / ' + gpuMemTotal + ' GB';
+  } else {
+    ['s-gpu','s-gpu-mem'].forEach(id => document.getElementById(id).textContent = 'N/A');
+    ['s-gpu-sub','s-gpu-mem-sub'].forEach(id => document.getElementById(id).textContent = 'No GPU');
+    document.getElementById('gpu-stat-card').style.opacity = '0.4';
+    document.getElementById('gpu-mem-stat-card').style.opacity = '0.4';
+  }
+
+  function buildDataset(key, gpuKey) {
+    return allData.filter(d => gpuKey ? (d.gpu && !d.gpu.error) : true)
+      .map(d => ({ x: new Date(d.timestamp), y: gpuKey ? d.gpu[gpuKey] : d[key] }));
+  }
+
+  charts.cpu.data.datasets[0].data = buildDataset('cpu_percent', null);
+  charts.mem.data.datasets[0].data = buildDataset('memory_percent', null);
+  charts.gpu.data.datasets[0].data = buildDataset(null, 'utilization');
+  charts.gpu-mem.data.datasets[0].data = buildDataset(null, 'memory_used_mb');
+
+  Object.values(charts).forEach(c => c.update());
+  document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString() + ' | ' + allData.length + ' data points';
+}
+
+initCharts();
+refresh();
+setInterval(refresh, 10000);
+</script>
+</body>
+</html>
