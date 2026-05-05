@@ -120,8 +120,12 @@ function initCharts() {
     const color = colors[key];
     const ctx = document.getElementById('chart-' + key).getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 220);
-    grad.addColorStop(0, color + '55');
-    grad.addColorStop(1, color + '00');
+    try {
+      grad.addColorStop(0, color + '55');
+      grad.addColorStop(1, color + '00');
+    } catch (e) {
+      console.error('addColorStop error for key:', key, 'color:', color, e);
+    }
     charts[key] = new Chart(ctx, {
       type: 'line',
       data: { datasets: [{ data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 2 }] },
@@ -144,27 +148,30 @@ async function refresh() {
   else if (range === 'day') cutoff = now - 86400 * 1000;
   else cutoff = now - 7 * 86400 * 1000;
 
-  const today = new Date().toISOString().slice(0, 4) + new Date().getMonth().toString().padStart(2, '0') + new Date().getDate().toString().padStart(2, '0');
+  // Use UTC to match collector.py's datetime.now().strftime("%Y%m%d")
+  const nowUtc = new Date(now + new Date().getTimezoneOffset() * 60000);
+  const today = nowUtc.toISOString().slice(0, 10).replace(/-/g, '');
+  const yesterday = new Date(now - 86400000 + new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10).replace(/-/g, '');
   const files = ['metrics_' + today + '.json'];
-
-  // For week view, also check yesterday if today has little data
-  if (range === 'week') {
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0,10).replace(/-/g,'');
-    files.push('metrics_' + yesterday + '.json');
-  }
+  if (range === 'week') files.push('metrics_' + yesterday + '.json');
 
   let allData = [];
   for (const f of files) {
     try {
       const r = await fetch('data/' + f + '?t=' + now);
-      if (r.ok) {
-        const text = await r.text();
-        text.trim().split('\n').forEach(line => {
-          try { allData.push(JSON.parse(line)); } catch {}
-        });
+      if (!r.ok) {
+        console.warn('Failed to fetch', f, r.status);
+        continue;
       }
-    } catch {}
+      const text = await r.text();
+      text.trim().split('\n').forEach(line => {
+        try { allData.push(JSON.parse(line)); } catch { }
+      });
+    } catch (e) {
+      console.warn('Fetch error for', f, e);
+    }
   }
+  console.log('Files tried:', files, 'Total records loaded:', allData.length);
 
   allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
