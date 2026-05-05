@@ -3,6 +3,7 @@
 
 import json
 import os
+import socket
 import subprocess
 import time
 from datetime import datetime, timezone
@@ -12,9 +13,18 @@ import psutil
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 os.makedirs(DATA_DIR, exist_ok=True)
 
+HOSTNAME = socket.gethostname()
+
 GPU_AVAILABLE = True
+GPU_TYPE = None
+GPU_COUNT = 0
 try:
-    subprocess.run(["nvidia-smi"], capture_output=True, check=True)
+    result = subprocess.run(
+        ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+        capture_output=True, text=True, check=True
+    )
+    GPU_TYPE = result.stdout.strip().split("\n")[0]
+    GPU_COUNT = len(result.stdout.strip().split("\n"))
 except Exception:
     GPU_AVAILABLE = False
     print("nvidia-smi not available, GPU metrics disabled.")
@@ -40,6 +50,9 @@ def collect():
     mem = psutil.virtual_memory()
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
+        "hostname": HOSTNAME,
+        "gpu_type": GPU_TYPE,
+        "gpu_count": GPU_COUNT,
         "cpu_percent": cpu_percent,
         "memory_percent": mem.percent,
         "memory_used_mb": mem.used / (1024**2),
@@ -51,13 +64,14 @@ def collect():
 
 def append_to_file(data, period):
     ts = datetime.now().strftime("%Y%m%d")
-    path = os.path.join(DATA_DIR, f"{period}_{ts}.json")
+    hostname = data.get("hostname", HOSTNAME)
+    path = os.path.join(DATA_DIR, f"{period}_{hostname}_{ts}.json")
     with open(path, "a") as f:
         f.write(json.dumps(data) + "\n")
 
 
 def daemon(interval=10):
-    print(f"Collector starting, interval={interval}s, GPU={'enabled' if GPU_AVAILABLE else 'disabled'}")
+    print(f"Collector starting on [{HOSTNAME}], interval={interval}s, GPU={'enabled' if GPU_AVAILABLE else 'disabled'}")
     while True:
         try:
             stats = collect()

@@ -17,6 +17,7 @@
   .controls select:hover, .controls button:hover { border-color: #555; }
   .controls button.active { background: #2d6cdf; border-color: #2d6cdf; }
   .controls button:hover { background: #383f5a; }
+  #machine-select { min-width: 280px; }
   .charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(500px, 1fr)); gap: 16px; }
   .chart-card { background: #1a1d27; border-radius: 12px; padding: 16px; border: 1px solid #252a3a; }
   .chart-card h3 { font-size: 0.9rem; color: #aaa; margin-bottom: 12px; font-weight: 500; }
@@ -35,6 +36,8 @@
   .gpu-mem-val { color: #ffb74d; }
   .updated { font-size: 0.75rem; color: #555; margin-top: 8px; }
   .no-gpu { color: #666; font-style: italic; }
+  .loading { opacity: 0.5; pointer-events: none; }
+  .machine-tag { font-size: 0.7rem; background: #2d6cdf; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
   @media (max-width: 600px) {
     .charts { grid-template-columns: 1fr; }
     .stat-value { font-size: 1.3rem; }
@@ -46,6 +49,18 @@
 <body>
 
 <h1>🖥️ System Monitor</h1>
+
+<div class="controls">
+  <label>Machine:</label>
+  <select id="machine-select">
+    <option value="">— Loading machines —</option>
+  </select>
+  <label style="margin-left:12px">Range:</label>
+  <button id="btn-hour" class="active" onclick="setRange('hour')">Hour</button>
+  <button id="btn-day" onclick="setRange('day')">Day</button>
+  <button id="btn-week" onclick="setRange('week')">Week</button>
+  <button onclick="refresh()" style="margin-left:auto">🔄 Refresh</button>
+</div>
 
 <div class="stats" id="stats">
   <div class="stat-card">
@@ -68,14 +83,6 @@
     <span class="stat-value gpu-mem-val" id="s-gpu-mem">--%</span>
     <span class="stat-sub" id="s-gpu-mem-sub">--</span>
   </div>
-</div>
-
-<div class="controls">
-  <label>Time Range:</label>
-  <button id="btn-hour" class="active" onclick="setRange('hour')">Hour</button>
-  <button id="btn-day" onclick="setRange('day')">Day</button>
-  <button id="btn-week" onclick="setRange('week')">Week</button>
-  <button onclick="refresh()" style="margin-left:auto">🔄 Refresh</button>
 </div>
 
 <div class="charts">
@@ -101,6 +108,8 @@
 <script>
 let range = 'hour';
 let charts = {};
+let machines = [];
+let currentMachine = null;
 const colors = { cpu:'4fc3f7', mem:'ba68c8', gpu:'81c784', 'gpu-mem':'ffb74d' };
 
 const chartOptions = (color) => ({
@@ -141,25 +150,67 @@ function setRange(r) {
   refresh();
 }
 
+function setMachine(hostname) {
+  currentMachine = machines.find(m => m.hostname === hostname) || null;
+  refresh();
+}
+
+async function loadMachines() {
+  try {
+    const r = await fetch('api/machines');
+    if (!r.ok) throw new Error('Failed to load machines');
+    machines = await r.json();
+    const sel = document.getElementById('machine-select');
+    sel.innerHTML = '';
+    if (machines.length === 0) {
+      sel.innerHTML = '<option value="">— No machines found —</option>';
+      return;
+    }
+    machines.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.hostname;
+      const gpuLabel = m.gpu_type ? ` (${m.gpu_type}${m.gpu_count > 1 ? ' x' + m.gpu_count : ''})` : ' (no GPU)';
+      opt.textContent = m.hostname + gpuLabel;
+      sel.appendChild(opt);
+    });
+    sel.value = machines[0].hostname;
+    currentMachine = machines[0];
+  } catch (e) {
+    console.error('Failed to load machines:', e);
+    document.getElementById('machine-select').innerHTML = '<option value="">— Error loading machines —</option>';
+  }
+}
+
 async function refresh() {
+  if (!currentMachine) return;
+  const hostname = currentMachine.hostname;
+  const hasGpu = currentMachine.gpu_type != null;
+
+  // Show/hide GPU cards
+  ['gpu','gpu-mem'].forEach(key => {
+    const card = document.getElementById(key + '-chart-card') || document.getElementById(key + '-stat-card');
+    const el = document.getElementById(key + '-stat-card') || document.getElementById(key + '-chart-card');
+    const statCardId = key === 'gpu' ? 'gpu-stat-card' : 'gpu-mem-stat-card';
+    document.getElementById(statCardId).style.opacity = hasGpu ? '1' : '0.4';
+  });
+
   const now = Date.now();
   let cutoff;
   if (range === 'hour') cutoff = now - 3600 * 1000;
   else if (range === 'day') cutoff = now - 86400 * 1000;
   else cutoff = now - 7 * 86400 * 1000;
 
-  // Use UTC methods to match collector.py's datetime.utcnow().strftime("%Y%m%d")
   const d = new Date();
   const yd = new Date(d.getTime() - 86400000);
   const today = d.getUTCFullYear().toString() + (d.getUTCMonth() + 1).toString().padStart(2, '0') + d.getUTCDate().toString().padStart(2, '0');
   const yesterday = yd.getUTCFullYear().toString() + (yd.getUTCMonth() + 1).toString().padStart(2, '0') + yd.getUTCDate().toString().padStart(2, '0');
-  const files = ['metrics_' + today + '.json'];
-  if (range === 'week') files.push('metrics_' + yesterday + '.json');
+  const files = ['data/metrics_' + hostname + '_' + today + '.json'];
+  if (range === 'week') files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
 
   let allData = [];
   for (const f of files) {
     try {
-      const r = await fetch('data/' + f + '?t=' + now);
+      const r = await fetch(f + '?t=' + now);
       if (!r.ok) {
         console.warn('Failed to fetch', f, r.status);
         continue;
@@ -172,13 +223,13 @@ async function refresh() {
       console.warn('Fetch error for', f, e);
     }
   }
-  console.log('Files tried:', files, 'Total records loaded:', allData.length);
+  console.log('Machine:', hostname, 'Files tried:', files, 'Total records loaded:', allData.length);
 
   allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   if (allData.length === 0) {
-    document.getElementById('updated').textContent = 'No data for this range. Collector may not be running.';
+    document.getElementById('updated').textContent = 'No data for this range on [' + hostname + ']. Collector may not be running.';
     return;
   }
 
@@ -192,7 +243,7 @@ async function refresh() {
   document.getElementById('s-mem').textContent = memPct + '%';
   document.getElementById('s-mem-sub').textContent = memUsed + ' / ' + memTotal + ' GB';
 
-  if (latest.gpu && !latest.gpu.error) {
+  if (hasGpu && latest.gpu && !latest.gpu.error) {
     const gpuPct = latest.gpu.utilization.toFixed(1);
     const gpuMemPct = (latest.gpu.memory_used_mb / latest.gpu.memory_total_mb * 100).toFixed(1);
     const gpuMemUsed = (latest.gpu.memory_used_mb / 1024).toFixed(1);
@@ -201,6 +252,8 @@ async function refresh() {
     document.getElementById('s-gpu-sub').textContent = latest.gpu.utilization.toFixed(1) + '%';
     document.getElementById('s-gpu-mem').textContent = gpuMemPct + '%';
     document.getElementById('s-gpu-mem-sub').textContent = gpuMemUsed + ' / ' + gpuMemTotal + ' GB';
+    document.getElementById('gpu-stat-card').style.opacity = '1';
+    document.getElementById('gpu-mem-stat-card').style.opacity = '1';
   } else {
     ['s-gpu','s-gpu-mem'].forEach(id => document.getElementById(id).textContent = 'N/A');
     ['s-gpu-sub','s-gpu-mem-sub'].forEach(id => document.getElementById(id).textContent = 'No GPU');
@@ -228,11 +281,16 @@ async function refresh() {
   charts['gpu-mem'].data.datasets[0].data = buildDataset(null, 'memory_used_mb', true);
 
   Object.values(charts).forEach(c => c.update());
-  document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString() + ' | ' + allData.length + ' data points';
+  document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString() + ' | ' + allData.length + ' data points | ' + currentMachine.hostname;
 }
 
+document.getElementById('machine-select').addEventListener('change', e => setMachine(e.target.value));
+
 initCharts();
-refresh().then(() => setInterval(refresh, 10000));
+loadMachines().then(() => {
+  refresh();
+  setInterval(refresh, 10000);
+});
 </script>
 </body>
 </html>
