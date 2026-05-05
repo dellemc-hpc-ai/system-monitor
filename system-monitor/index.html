@@ -101,6 +101,7 @@
 <script>
 let range = 'hour';
 let charts = {};
+const colors = { cpu:'4fc3f7', mem:'ba68c8', gpu:'81c784', 'gpu-mem':'ffb74d' };
 
 const chartOptions = (color) => ({
   responsive: true, maintainAspectRatio: false,
@@ -116,7 +117,6 @@ const chartOptions = (color) => ({
 
 function initCharts() {
   ['cpu','mem','gpu','gpu-mem'].forEach(key => {
-    const colors = { cpu:'4fc3f7', mem:'ba68c8', gpu:'81c784', 'gpu-mem':'ffb74d' };
     const color = colors[key];
     const ctx = document.getElementById('chart-' + key).getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 220);
@@ -144,7 +144,7 @@ async function refresh() {
   else if (range === 'day') cutoff = now - 86400 * 1000;
   else cutoff = now - 7 * 86400 * 1000;
 
-  const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const today = new Date().toISOString().slice(0, 4) + new Date().getMonth().toString().padStart(2, '0') + new Date().getDate().toString().padStart(2, '0');
   const files = ['metrics_' + today + '.json'];
 
   // For week view, also check yesterday if today has little data
@@ -207,6 +207,11 @@ async function refresh() {
         if (asPercent) y = d.gpu.memory_total_mb > 0 ? y / d.gpu.memory_total_mb * 100 : 0;
         return { x: new Date(d.timestamp), y };
       });
+  }
+
+  if (!charts.cpu) {
+    document.getElementById('updated').textContent = 'Charts not initialized. See console errors.';
+    return;
   }
 
   charts.cpu.data.datasets[0].data = buildDataset('cpu_percent', null);
