@@ -207,7 +207,7 @@ async function refresh() {
   charts.cpu.data.datasets[0].data = buildDataset('cpu_percent', null);
   charts.mem.data.datasets[0].data = buildDataset('memory_percent', null);
   charts.gpu.data.datasets[0].data = buildDataset(null, 'utilization');
-  charts.gpu-mem.data.datasets[0].data = buildDataset(null, 'memory_used_mb');
+  charts['gpu-mem'].data.datasets[0].data = buildDataset(null, 'memory_used_mb');
 
   Object.values(charts).forEach(c => c.update());
   document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString() + ' | ' + allData.length + ' data points';
