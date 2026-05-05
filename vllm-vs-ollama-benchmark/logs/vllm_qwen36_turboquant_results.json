@@ -1,0 +1,31 @@
+{
+  "case": "turboquant",
+  "label": "vLLM+TurboQuant",
+  "model": "QuantTrio/Qwen3.6-35B-A3B-AWQ",
+  "extra_args": [
+    "--kv-cache-dtype",
+    "turboquant_k8v4",
+    "--gpu-memory-utilization",
+    "0.85",
+    "--max-model-len",
+    "16384"
+  ],
+  "io_results": {
+    "trans": {
+      "status": "OOM/START_FAILED",
+      "error": "Failed to start container"
+    },
+    "gen": {
+      "status": "OOM/START_FAILED",
+      "error": "Failed to start container"
+    },
+    "summ": {
+      "status": "OOM/START_FAILED",
+      "error": "Failed to start container"
+    },
+    "16k": {
+      "status": "OOM/START_FAILED",
+      "error": "Failed to start container"
+    }
+  }
+}

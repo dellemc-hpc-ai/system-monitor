@@ -121,8 +121,8 @@ function initCharts() {
     const ctx = document.getElementById('chart-' + key).getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 220);
     try {
-      grad.addColorStop(0, color + '55');
-      grad.addColorStop(1, color + '00');
+      grad.addColorStop(0, '#' + color + '55');
+      grad.addColorStop(1, '#' + color + '00');
     } catch (e) {
       console.error('addColorStop error for key:', key, 'color:', color, e);
     }

@@ -1,0 +1,90 @@
+{
+  "engine": "vLLM+TurboQuant",
+  "model": "hugging-quants/Meta-Llama-3.1-8B-Instruct-AWQ-INT4",
+  "results": {
+    "trans": {
+      "runs": [
+        {
+          "elapsed_ms": 1906.9,
+          "tok": 93,
+          "tok_s": 48.77
+        },
+        {
+          "elapsed_ms": 1966.5,
+          "tok": 97,
+          "tok_s": 49.33
+        },
+        {
+          "elapsed_ms": 1908.9,
+          "tok": 94,
+          "tok_s": 49.24
+        }
+      ],
+      "mean_tok_s": 49.11,
+      "mean_latency_ms": 1927.4
+    },
+    "gen": {
+      "runs": [
+        {
+          "elapsed_ms": 22218.7,
+          "tok": 1082,
+          "tok_s": 48.7
+        },
+        {
+          "elapsed_ms": 35264.5,
+          "tok": 1423,
+          "tok_s": 40.35
+        },
+        {
+          "elapsed_ms": 56192.4,
+          "tok": 1229,
+          "tok_s": 21.87
+        }
+      ],
+      "mean_tok_s": 36.97,
+      "mean_latency_ms": 37891.9
+    },
+    "summ": {
+      "runs": [
+        {
+          "elapsed_ms": 5716.6,
+          "tok": 115,
+          "tok_s": 20.12
+        },
+        {
+          "elapsed_ms": 4634.0,
+          "tok": 103,
+          "tok_s": 22.23
+        },
+        {
+          "elapsed_ms": 4904.8,
+          "tok": 109,
+          "tok_s": 22.22
+        }
+      ],
+      "mean_tok_s": 21.52,
+      "mean_latency_ms": 5085.1
+    },
+    "16k": {
+      "runs": [
+        {
+          "elapsed_ms": 13.1,
+          "tok": 0,
+          "tok_s": 0.0
+        },
+        {
+          "elapsed_ms": 11.3,
+          "tok": 0,
+          "tok_s": 0.0
+        },
+        {
+          "elapsed_ms": 11.3,
+          "tok": 0,
+          "tok_s": 0.0
+        }
+      ],
+      "mean_tok_s": 0,
+      "mean_latency_ms": 11.9
+    }
+  }
+}

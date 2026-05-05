@@ -1,0 +1,126 @@
+{
+  "model": "qwen3.6:35b-a3b-q4_k_m",
+  "engine": "ollama",
+  "io_results": {
+    "translation": {
+      "isl": 400,
+      "osl": 400,
+      "runs": [
+        {
+          "elapsed_ms": 32924.5,
+          "eval_count": 400,
+          "tok_per_s": 12.75,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 32929.1,
+          "eval_count": 400,
+          "tok_per_s": 12.75,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 32927.9,
+          "eval_count": 400,
+          "tok_per_s": 12.76,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 32905.3,
+          "eval_count": 400,
+          "tok_per_s": 12.76,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 32897.1,
+          "eval_count": 400,
+          "tok_per_s": 12.77,
+          "content_preview": ""
+        }
+      ],
+      "mean_latency_ms": 32916.8,
+      "stddev_ms": 14.6,
+      "mean_tok_s": 12.76,
+      "stddev_tok_s": 0.01
+    },
+    "generation": {
+      "isl": 200,
+      "osl": 2000,
+      "runs": [
+        {
+          "elapsed_ms": 159617.6,
+          "eval_count": 2000,
+          "tok_per_s": 12.67,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 159634.6,
+          "eval_count": 2000,
+          "tok_per_s": 12.67,
+          "content_preview": "The problem with eternal life, Ignis had decided, was not the lack of adventure. It was the redundan"
+        },
+        {
+          "elapsed_ms": 159660.0,
+          "eval_count": 2000,
+          "tok_per_s": 12.67,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 159668.2,
+          "eval_count": 2000,
+          "tok_per_s": 12.67,
+          "content_preview": "### The Compiler of Cragtooth Peak\n\nSpark was an anomaly among dragons. While his kin spent their mi"
+        },
+        {
+          "elapsed_ms": 159627.4,
+          "eval_count": 2000,
+          "tok_per_s": 12.67,
+          "content_preview": ""
+        }
+      ],
+      "mean_latency_ms": 159641.6,
+      "stddev_ms": 21.6,
+      "mean_tok_s": 12.67,
+      "stddev_tok_s": 0.0
+    },
+    "summarization": {
+      "isl": 2000,
+      "osl": 200,
+      "runs": [
+        {
+          "elapsed_ms": 24618.6,
+          "eval_count": 200,
+          "tok_per_s": 12.63,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 22768.9,
+          "eval_count": 200,
+          "tok_per_s": 12.62,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 22714.9,
+          "eval_count": 200,
+          "tok_per_s": 12.63,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 22731.4,
+          "eval_count": 200,
+          "tok_per_s": 12.62,
+          "content_preview": ""
+        },
+        {
+          "elapsed_ms": 22735.5,
+          "eval_count": 200,
+          "tok_per_s": 12.61,
+          "content_preview": ""
+        }
+      ],
+      "mean_latency_ms": 23113.9,
+      "stddev_ms": 841.4,
+      "mean_tok_s": 12.62,
+      "stddev_tok_s": 0.01
+    }
+  }
+}
