@@ -117,14 +117,15 @@ const chartOptions = (color) => ({
 function initCharts() {
   ['cpu','mem','gpu','gpu-mem'].forEach(key => {
     const colors = { cpu:'4fc3f7', mem:'ba68c8', gpu:'81c784', 'gpu-mem':'ffb74d' };
+    const color = colors[key];
     const ctx = document.getElementById('chart-' + key).getContext('2d');
     const grad = ctx.createLinearGradient(0, 0, 0, 220);
-    grad.addColorStop(0, colors[key] + '55');
-    grad.addColorStop(1, colors[key] + '00');
+    grad.addColorStop(0, color + '55');
+    grad.addColorStop(1, color + '00');
     charts[key] = new Chart(ctx, {
       type: 'line',
-      data: { datasets: [{ data: [], borderColor: '#' + colors[key], backgroundColor: grad, fill: true, borderWidth: 2 }] },
-      options: chartOptions(colors[key])
+      data: { datasets: [{ data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 2 }] },
+      options: chartOptions(color)
     });
   });
 }
