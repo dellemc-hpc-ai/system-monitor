@@ -157,7 +157,7 @@ function setMachine(hostname) {
 
 async function loadMachines() {
   try {
-    const r = await fetch('api/machines');
+    const r = await fetch('machines.json?t=' + Date.now());
     if (!r.ok) throw new Error('Failed to load machines');
     machines = await r.json();
     const sel = document.getElementById('machine-select');
