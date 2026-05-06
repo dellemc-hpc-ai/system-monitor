@@ -1,7 +1,9 @@
 [
   {
     "hostname": "frank-XPS-8960",
-    "gpu_type": "NVIDIA L4",
-    "gpu_count": 1
+    "gpu_count": 1,
+    "gpu_types": [
+      "NVIDIA L4"
+    ]
   }
 ]
