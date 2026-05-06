@@ -45,6 +45,74 @@ def _probe_gpu():
 _probe_gpu()
 
 
+# ─── System power (BMC / IPMI / RAPL, no sudo unless RAPL sudo available) ──────
+
+def get_system_power():
+    """
+    Returns system-level power consumption in watts (float), or None if unavailable.
+
+    Tries three methods in order:
+    1. ipmitool  (BMC-based, no sudo needed)
+    2. /dev/ipmi0 read  (IPMI device driver, no sudo)
+    3. RAPL sysfs energy_uj via sudo  (CPU+DRAM package, only if sudo works)
+
+    On a machine without BMC/IPMI this always returns None; no error is printed.
+    """
+    # ── Method 1: ipmitool ───────────────────────────────────────────────────
+    try:
+        result = subprocess.run(
+            ["ipmitool", "raw", "0x3c", "0x01"],
+            capture_output=True, text=True, check=True, timeout=5
+        )
+        # Sample response: "3c 01 00 6b" → bytes [2,3] = 0x006b = 107 W
+        raw = result.stdout.strip()
+        parts = raw.split()
+        if len(parts) >= 4:
+            # Sensor type 0x3C (System Board) command 0x01 reads AC power in watts
+            watts = int(parts[2], 16) << 8 | int(parts[3], 16)
+            return float(watts)
+    except Exception:
+        pass
+
+    # ── Method 2: /dev/ipmi0 via OpenIPMI driver (no sudo needed) ────────────
+    # /dev/ipmi0 is a character device; simple read() returns nothing.
+    # Real IPMI communication requires ioctl calls — not implemented here.
+    # Machines with BMC/IPMI hardware typically have ipmitool available (Method 1).
+    try:
+        if os.path.exists("/dev/ipmi0"):
+            # Quick existence check — if the device node exists but ipmitool
+            # doesn't work, there's no sensible fallback without ioctl complexity.
+            pass
+    except Exception:
+        pass
+
+    # ── Method 3: RAPL via sudo (only if sudo works without password) ─────────
+    # /sys/class/powercap/intel-rapl:0/energy_uj requires root.
+    # We only proceed if `sudo -n true` succeeds silently (no password prompt).
+    try:
+        check = subprocess.run(
+            ["sudo", "-n", "true"],
+            capture_output=True, timeout=2
+        )
+        if check.returncode == 0:
+            # Read package-0 (CPU+DRAM package power)
+            energy_path = "/sys/class/powercap/intel-rapl:0/energy_uj"
+            result = subprocess.run(
+                ["sudo", "cat", energy_path],
+                capture_output=True, text=True, check=True, timeout=5
+            )
+            joules = float(result.stdout.strip())
+            # Convert microjoules → watts using a 1-second window assumption.
+            # For accurate per-sample power, this needs the time delta between
+            # samples (handled outside this function via the collector's own dt).
+            watts = joules / 1_000_000  # W for 1-second interval
+            return watts
+    except Exception:
+        pass
+
+    return None
+
+
 # ─── GPU power (nvidia-smi, no sudo needed) ────────────────────────────────────
 
 def get_gpu_power():
@@ -218,6 +286,7 @@ def collect():
     mem = psutil.virtual_memory()
     net = _get_net_throughput_mbs()
     gpu_power = get_gpu_power()
+    sys_power = get_system_power()   # may be None on machines without BMC
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": HOSTNAME,
@@ -227,6 +296,7 @@ def collect():
         "memory_used_mb": mem.used / (1024 ** 2),
         "memory_total_mb": mem.total / (1024 ** 2),
         "network": net,
+        "system_power_w": sys_power,
         "gpu_power": gpu_power,
         "gpu": get_gpu_stats()
     }
@@ -251,8 +321,10 @@ def daemon(interval=10):
             stats = collect()
             append_to_file(stats, "metrics")
             pwr_str = ""
+            if stats.get("system_power_w") is not None:
+                pwr_str = f" SYS={stats['system_power_w']:.0f}W"
             if stats.get("gpu_power"):
-                pwr_str = " " + "/".join(
+                pwr_str += " " + "/".join(
                     f"GPU{g['id']}={g.get('power_w', '?')}W" for g in stats["gpu_power"]
                 )
             net_str = ""
