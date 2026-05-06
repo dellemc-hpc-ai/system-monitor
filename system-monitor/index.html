@@ -207,25 +207,32 @@ async function refresh() {
   const files = ['data/metrics_' + hostname + '_' + today + '.json'];
   if (range === 'week') files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
 
+  console.log('[DEBUG refresh] range:', range, '| now:', now, '| cutoff:', cutoff, '| cutoff_age_h:', ((now - cutoff)/3600000).toFixed(1), '| today:', today, '| yesterday:', yesterday, '| files:', JSON.stringify(files));
+
   let allData = [];
   for (const f of files) {
     try {
       const r = await fetch(f + '?t=' + now);
+      console.log('[DEBUG fetch]', f, 'status:', r.status, 'ok:', r.ok);
       if (!r.ok) {
         console.warn('Failed to fetch', f, r.status);
         continue;
       }
       const text = await r.text();
-      text.trim().split('\n').forEach(line => {
+      const lines = text.trim().split('\n');
+      console.log('[DEBUG lines] file:', f, 'line_count:', lines.length, 'first_ts:', lines[0] ? JSON.parse(lines[0]).timestamp : 'none');
+      lines.forEach(line => {
         try { allData.push(JSON.parse(line)); } catch { }
       });
     } catch (e) {
       console.warn('Fetch error for', f, e);
     }
   }
-  console.log('Machine:', hostname, 'Files tried:', files, 'Total records loaded:', allData.length);
+  console.log('[DEBUG] Machine:', hostname, 'Files tried:', files, 'Total records loaded:', allData.length, '| range:', range);
 
+  const beforeFilter = allData.length;
   allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
+  console.log('[DEBUG filter] before:', beforeFilter, 'after:', allData.length, 'cutoff_ts:', new Date(cutoff).toISOString());
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   if (allData.length === 0) {
