@@ -39,10 +39,50 @@ def _probe_gpu():
 _probe_gpu()
 
 
+def get_io_stats():
+    """
+    Query PCIe RX/TX and NVLink RX/TX for all GPUs using nvidia-smi dmon.
+    Falls back to None if nvidia-smi dmon is unavailable or returns no data.
+    Returns a dict mapping gpu_id -> {rxpci_mbs, txpci_mbs, nvlrx_mbs, nvltx_mbs}
+    ('-' entries become None to indicate N/A).
+    """
+    if not GPU_AVAILABLE or GPU_COUNT == 0:
+        return None
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61",
+             "-c", "1", "-o", "T"],
+            capture_output=True, text=True, check=True, timeout=5
+        )
+        lines = result.stdout.strip().split("\n")
+        io_map = {}
+        for line in lines:
+            # Skip header/comment lines and empty lines
+            if not line or line.startswith("#") or line.startswith("gpu"):
+                continue
+            parts = line.split()
+            if len(parts) < 5:
+                continue
+            try:
+                gpu_id = int(parts[0])
+                rxpci  = None if parts[1] == "-" else float(parts[1])
+                txpci  = None if parts[2] == "-" else float(parts[2])
+                nvlrx  = None if parts[3] == "-" else float(parts[3])
+                nvltx  = None if parts[4] == "-" else float(parts[4])
+                io_map[gpu_id] = {"rxpci_mbs": rxpci, "txpci_mbs": txpci,
+                                  "nvlrx_mbs": nvlrx, "nvltx_mbs": nvltx}
+            except (ValueError, IndexError):
+                continue
+        return io_map if io_map else None
+    except Exception:
+        return None
+
+
 def get_gpu_stats():
     """Collect stats for all available GPUs (up to 8). Returns a list."""
     if not GPU_AVAILABLE or GPU_COUNT == 0:
         return None
+    io_stats = get_io_stats()   # one dmon call for all GPUs
     gpus = []
     for i in range(GPU_COUNT):
         try:
@@ -56,12 +96,16 @@ def get_gpu_stats():
                 capture_output=True, text=True, check=True
             )
             util, mem_used, mem_total = result.stdout.strip().split(", ")
-            gpus.append({
+            gpu_entry = {
                 "id": i,
                 "utilization": float(util),
                 "memory_used_mb": float(mem_used),
                 "memory_total_mb": float(mem_total)
-            })
+            }
+            # Append PCIe/NVLink stats from dmon (GPU0 only in display)
+            if io_stats and i in io_stats:
+                gpu_entry.update(io_stats[i])
+            gpus.append(gpu_entry)
         except Exception as e:
             gpus.append({"id": i, "error": str(e)})
     return gpus

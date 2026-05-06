@@ -101,6 +101,10 @@
     <h3>GPU Memory (%)</h3>
     <div class="chart-wrapper"><canvas id="chart-gpu-mem"></canvas></div>
   </div>
+  <div class="chart-card" id="io-chart-card">
+    <h3>GPU0 PCIe + NVLink (MB/s)</h3>
+    <div class="chart-wrapper"><canvas id="chart-io"></canvas></div>
+  </div>
 </div>
 <p class="updated" id="updated"></p>
 
@@ -133,6 +137,37 @@ function initCharts() {
   // GPU and GPU-mem charts are re-initialized per-machine (dynamic datasets)
   charts.gpu    = buildGpuChart('chart-gpu',    GPU_COLORS, 'utilization', '%');
   charts['gpu-mem'] = buildGpuChart('chart-gpu-mem', GPU_COLORS, 'memory_used_mb', 'MB');
+  // PCIe + NVLink IO chart (GPU0 only, 4 datasets: PCIe RX/TX, NVLink RX/TX)
+  charts.io = buildIoChart('chart-io');
+}
+
+const IO_COLORS = {
+  rxpci:  'f06292',   // pink
+  txpci:  'e91e63',   // dark pink
+  nvlrx:  '4dd0e1',   // cyan
+  nvltx:  '26c6da',   // dark cyan
+};
+
+function buildIoChart(canvasId) {
+  const datasets = [
+    { label: 'PCIe RX', data: [], borderColor: '#' + IO_COLORS.rxpci, backgroundColor: 'transparent', borderWidth: 1.5, hidden: false },
+    { label: 'PCIe TX', data: [], borderColor: '#' + IO_COLORS.txpci, backgroundColor: 'transparent', borderWidth: 1.5, hidden: false },
+    { label: 'NVLink RX', data: [], borderColor: '#' + IO_COLORS.nvlrx, backgroundColor: 'transparent', borderWidth: 1.5, hidden: true },
+    { label: 'NVLink TX', data: [], borderColor: '#' + IO_COLORS.nvltx, backgroundColor: 'transparent', borderWidth: 1.5, hidden: true },
+  ];
+  const chart = new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { datasets },
+    options: {
+      ...chartOptions(),
+      // No y-axis max cap since throughput is unbounded MB/s
+      scales: {
+        ...chartOptions().scales,
+        y: { min: 0, grid: { color: '#252a3a' }, ticks: { color: '#666' } }
+      }
+    }
+  });
+  return chart;
 }
 
 function initOne(key, dataKey, color) {
@@ -234,6 +269,7 @@ async function refresh() {
   const gpuOpacity = hasGpu ? '1' : '0.4';
   document.getElementById('gpu-stat-card').style.opacity    = gpuOpacity;
   document.getElementById('gpu-mem-stat-card').style.opacity = gpuOpacity;
+  document.getElementById('io-chart-card').style.opacity     = hasGpu ? '1' : '0.4';
 
   // Determine which data files to load.
   // We always load 'today' (current UTC date file). For day/week views we also load
@@ -336,6 +372,9 @@ async function refresh() {
   if (hasGpu) updateGpuChart(charts.gpu,      allData, 'utilization',    '%',  gpuCount);
   if (hasGpu) updateGpuChart(charts['gpu-mem'], allData, 'memory_used_mb', 'MB', gpuCount);
 
+  // ── Update PCIe/NVLink IO chart (GPU0 only)
+  updateIoChart(allData);
+
   document.getElementById('updated').textContent =
     'Updated: ' + new Date().toLocaleTimeString() +
     ' | ' + allData.length + ' pts | ' + hostname;
@@ -366,6 +405,31 @@ function updateGpuChart(chart, allData, valueKey, unit, gpuCount) {
     });
   }
   chart.update();
+}
+
+function updateIoChart(allData) {
+  // Extract GPU0 PCIe/NVLink stats. NVLink lines are hidden by default (no NVLink on L4).
+  const gpuId = 0;
+  const KEYS = [
+    { key: 'rxpci_mbs', dsIdx: 0 },
+    { key: 'txpci_mbs', dsIdx: 1 },
+    { key: 'nvlrx_mbs', dsIdx: 2 },
+    { key: 'nvltx_mbs', dsIdx: 3 },
+  ];
+  KEYS.forEach(({ key, dsIdx }) => {
+    charts.io.data.datasets[dsIdx].data = allData.map(d => {
+      const gpus = _normalizeGpus(d.gpu);
+      const g    = gpus[gpuId];
+      const y    = (g && !g.error && g[key] != null) ? g[key] : null;
+      return y != null ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
+    });
+  });
+  // Show NVLink datasets only if any data is non-null
+  const gpu0Data = allData.map(d => _normalizeGpus(d.gpu)[gpuId]).filter(g => g && !g.error);
+  const hasNvlink = gpu0Data.some(g => g.nvlrx_mbs != null || g.nvltx_mbs != null);
+  charts.io.data.datasets[2].hidden = !hasNvlink;  // NVLink RX
+  charts.io.data.datasets[3].hidden = !hasNvlink;  // NVLink TX
+  charts.io.update();
 }
 
 function mean(arr) {
