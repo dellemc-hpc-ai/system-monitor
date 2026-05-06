@@ -133,7 +133,26 @@ Each line in `data/metrics_<hostname>_<YYYYMMDD>.json`:
 | `memory_percent` | float | System RAM utilization % |
 | `memory_used_mb` | float | System RAM used (MB) |
 | `memory_total_mb` | float | System RAM total (MB) |
+| `network` | array | Per-interface network throughput (see below) |
+| `system_power_w` | float or null | Whole-machine power (W) via BMC/ipmitool or RAPL; null if unavailable |
+| `gpu_power` | array or null | Per-GPU power draw (see below); null if no GPU |
 | `gpu` | array or null | Per-GPU stats (see below); null if no GPU |
+
+`network[]` elements:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Interface name (e.g. "eth0", "ib0") |
+| `rx_mbs` | float | RX throughput (MB/s) |
+| `tx_mbs` | float | TX throughput (MB/s) |
+
+`gpu_power[]` elements:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | integer | GPU index (0–7) |
+| `power_w` | float | Current power draw (W) |
+| `power_limit_w` | float | Power limit / TDP (W) |
 
 `gpu[]` elements:
 
