@@ -63,7 +63,7 @@ def collect():
 
 
 def append_to_file(data, period):
-    ts = datetime.now().strftime("%Y%m%d")
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d")
     hostname = data.get("hostname", HOSTNAME)
     path = os.path.join(DATA_DIR, f"{period}_{hostname}_{ts}.json")
     with open(path, "a") as f:
