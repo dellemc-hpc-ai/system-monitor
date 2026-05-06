@@ -35,9 +35,8 @@
   .gpu-val { color: #81c784; }
   .gpu-mem-val { color: #ffb74d; }
   .updated { font-size: 0.75rem; color: #555; margin-top: 8px; }
-  .no-gpu { color: #666; font-style: italic; }
   .loading { opacity: 0.5; pointer-events: none; }
-  .machine-tag { font-size: 0.7rem; background: #2d6cdf; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
+  .gpu-tag { font-size: 0.7rem; background: #2d6cdf; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
   @media (max-width: 600px) {
     .charts { grid-template-columns: 1fr; }
     .stat-value { font-size: 1.3rem; }
@@ -74,7 +73,7 @@
     <span class="stat-sub" id="s-mem-sub">--</span>
   </div>
   <div class="stat-card" id="gpu-stat-card">
-    <span class="stat-label">GPU Usage</span>
+    <span class="stat-label">GPU Utilization</span>
     <span class="stat-value gpu-val" id="s-gpu">--%</span>
     <span class="stat-sub" id="s-gpu-sub">--</span>
   </div>
@@ -95,7 +94,7 @@
     <div class="chart-wrapper"><canvas id="chart-mem"></canvas></div>
   </div>
   <div class="chart-card" id="gpu-chart-card">
-    <h3>GPU Usage (%)</h3>
+    <h3>GPU Utilization (%)</h3>
     <div class="chart-wrapper"><canvas id="chart-gpu"></canvas></div>
   </div>
   <div class="chart-card" id="gpu-mem-chart-card">
@@ -106,45 +105,85 @@
 <p class="updated" id="updated"></p>
 
 <script>
-let range = 'hour';
-let charts = {};
-let machines = [];
+// ─── Config ──────────────────────────────────────────────────────────────────
+const RANGES = { hour: 3600, day: 86400, week: 604800 };
+
+// Colors for up to 8 GPUs (index 0–7). Single-homedashboard uses GPU[0] color.
+const GPU_COLORS = [
+  '81c784', // GPU0 — green (original)
+  '4fc3f7', // GPU1 — light blue
+  'ba68c8', // GPU2 — purple
+  'ffb74d', // GPU3 — orange (original gpu-mem)
+  'ef9a9a', // GPU4 — red
+  'ffee58', // GPU5 — yellow
+  '80cbc4', // GPU6 — teal
+  'ce93d8', // GPU7 — lavender
+];
+
+// ─── State ────────────────────────────────────────────────────────────────────
+let currentRange = 'hour';
+let charts       = {};
+let machines     = [];
 let currentMachine = null;
-const colors = { cpu:'4fc3f7', mem:'ba68c8', gpu:'81c784', 'gpu-mem':'ffb74d' };
 
-const chartOptions = (color) => ({
-  responsive: true, maintainAspectRatio: false,
-  animation: { duration: 300 },
-  scales: {
-    x: { type: 'time', time: { displayFormats: { hour: 'HH:mm', day: 'MM dd' } },
-      grid: { color: '#252a3a' }, ticks: { color: '#666', maxTicksLimit: 8 } },
-    y: { min: 0, max: 100, grid: { color: '#252a3a' }, ticks: { color: '#666' } }
-  },
-  plugins: { legend: { display: false } },
-  elements: { point: { radius: 0, hoverRadius: 4 }, line: { tension: 0.3 } }
-});
-
+// ─── Init ────────────────────────────────────────────────────────────────────
 function initCharts() {
-  ['cpu','mem','gpu','gpu-mem'].forEach(key => {
-    const color = colors[key];
-    const ctx = document.getElementById('chart-' + key).getContext('2d');
-    const grad = ctx.createLinearGradient(0, 0, 0, 220);
-    try {
-      grad.addColorStop(0, '#' + color + '55');
-      grad.addColorStop(1, '#' + color + '00');
-    } catch (e) {
-      console.error('addColorStop error for key:', key, 'color:', color, e);
-    }
-    charts[key] = new Chart(ctx, {
-      type: 'line',
-      data: { datasets: [{ data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 2 }] },
-      options: chartOptions(color)
-    });
+  initOne('cpu', 'cpu', '4fc3f7');
+  initOne('mem', 'mem', 'ba68c8');
+  // GPU and GPU-mem charts are re-initialized per-machine (dynamic datasets)
+  charts.gpu    = buildGpuChart('chart-gpu',    GPU_COLORS, 'utilization', '%');
+  charts['gpu-mem'] = buildGpuChart('chart-gpu-mem', GPU_COLORS, 'memory_used_mb', 'MB');
+}
+
+function initOne(key, dataKey, color) {
+  const ctx = document.getElementById('chart-' + key).getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 220);
+  grad.addColorStop(0, '#' + color + '55');
+  grad.addColorStop(1, '#' + color + '00');
+  charts[key] = new Chart(ctx, {
+    type: 'line',
+    data: { datasets: [{ label: dataKey, data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 2 }] },
+    options: chartOptions()
   });
 }
 
+function buildGpuChart(canvasId, colors, valueKey, unit) {
+  // Build one dataset per GPU slot (up to 8)
+  const datasets = Array.from({ length: 8 }, (_, i) => {
+    const color = colors[i % colors.length];
+    const grad = document.getElementById(canvasId).getContext('2d').createLinearGradient(0, 0, 0, 220);
+    grad.addColorStop(0, '#' + color + '55');
+    grad.addColorStop(1, '#' + color + '00');
+    return { label: 'GPU' + i, data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 1.5, hidden: i > 0 };
+  });
+  const chart = new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { datasets },
+    options: chartOptions()
+  });
+  chart._valueKey   = valueKey;
+  chart._unit       = unit;
+  chart._gpuCount   = 0;
+  return chart;
+}
+
+function chartOptions() {
+  return {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 300 },
+    scales: {
+      x: { type: 'time', time: { displayFormats: { hour: 'HH:mm', day: 'MM dd' } },
+        grid: { color: '#252a3a' }, ticks: { color: '#666', maxTicksLimit: 8 } },
+      y: { min: 0, max: 100, grid: { color: '#252a3a' }, ticks: { color: '#666' } }
+    },
+    plugins: { legend: { display: true, labels: { color: '#888', boxWidth: 12, font: { size: 11 } } } },
+    elements: { point: { radius: 0, hoverRadius: 4 }, line: { tension: 0.3 } }
+  };
+}
+
+// ─── Controls ────────────────────────────────────────────────────────────────
 function setRange(r) {
-  range = r;
+  currentRange = r;
   ['btn-hour','btn-day','btn-week'].forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById('btn-' + r).classList.add('active');
   refresh();
@@ -155,6 +194,7 @@ function setMachine(hostname) {
   refresh();
 }
 
+// ─── Load machines ────────────────────────────────────────────────────────────
 async function loadMachines() {
   try {
     const r = await fetch('machines.json?t=' + Date.now());
@@ -169,8 +209,10 @@ async function loadMachines() {
     machines.forEach(m => {
       const opt = document.createElement('option');
       opt.value = m.hostname;
-      const gpuLabel = m.gpu_type ? ` (${m.gpu_type}${m.gpu_count > 1 ? ' x' + m.gpu_count : ''})` : ' (no GPU)';
-      opt.textContent = m.hostname + gpuLabel;
+      const gpuDesc = m.gpu_count > 0
+        ? ` (${m.gpu_types ? m.gpu_types[0] : 'GPU'} x${m.gpu_count})`
+        : ' (no GPU)';
+      opt.textContent = m.hostname + gpuDesc;
       sel.appendChild(opt);
     });
     sel.value = machines[0].hostname;
@@ -181,111 +223,134 @@ async function loadMachines() {
   }
 }
 
+// ─── Refresh ─────────────────────────────────────────────────────────────────
 async function refresh() {
   if (!currentMachine) return;
-  const hostname = currentMachine.hostname;
-  const hasGpu = currentMachine.gpu_type != null;
+  const hostname  = currentMachine.hostname;
+  const gpuCount  = currentMachine.gpu_count || 0;
+  const hasGpu    = gpuCount > 0;
 
-  // Show/hide GPU cards
-  ['gpu','gpu-mem'].forEach(key => {
-    const card = document.getElementById(key + '-chart-card') || document.getElementById(key + '-stat-card');
-    const el = document.getElementById(key + '-stat-card') || document.getElementById(key + '-chart-card');
-    const statCardId = key === 'gpu' ? 'gpu-stat-card' : 'gpu-mem-stat-card';
-    document.getElementById(statCardId).style.opacity = hasGpu ? '1' : '0.4';
-  });
+  // Show / hide GPU elements
+  const gpuOpacity = hasGpu ? '1' : '0.4';
+  document.getElementById('gpu-stat-card').style.opacity    = gpuOpacity;
+  document.getElementById('gpu-mem-stat-card').style.opacity = gpuOpacity;
 
-  const now = Date.now();
-  let cutoff;
-  if (range === 'hour') cutoff = now - 3600 * 1000;
-  else if (range === 'day') cutoff = now - 86400 * 1000;
-  else cutoff = now - 7 * 86400 * 1000;
+  // ── Determine which data files to load (local date, yesterday for day/week)
+  const now       = Date.now();
+  const cutoff    = now - (RANGES[currentRange] * 1000);
+  const d         = new Date();
+  const yd        = new Date(d.getTime() - 86400000);
+  const today     = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const yesterday = yd.getFullYear() + String(yd.getMonth()+1).padStart(2,'0') + String(yd.getDate()).padStart(2,'0');
+  const files     = ['data/metrics_' + hostname + '_' + today + '.json'];
+  if (currentRange === 'day' || currentRange === 'week')
+    files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
 
-  // Use LOCAL date (not UTC) to match how collector.py names files (based on local timestamp)
-  const d = new Date();
-  const yd = new Date(d.getTime() - 86400000);
-  const today = d.getFullYear().toString() + (d.getMonth() + 1).toString().padStart(2, '0') + d.getDate().toString().padStart(2, '0');
-  const yesterday = yd.getFullYear().toString() + (yd.getMonth() + 1).toString().padStart(2, '0') + yd.getDate().toString().padStart(2, '0');
-  // Load both today and yesterday files for day view (data may span midnight local time)
-  const files = ['data/metrics_' + hostname + '_' + today + '.json'];
-  if (range === 'day' || range === 'week') files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
-
-  console.log('[refresh] range:', range, '| today:', today, '| yesterday:', yesterday, '| files:', JSON.stringify(files));
-
+  // ── Fetch & parse
   let allData = [];
   for (const f of files) {
     try {
       const r = await fetch(f + '?t=' + now);
       if (!r.ok) { console.warn('Failed to fetch', f, r.status); continue; }
-      const text = await r.text();
+      const text  = await r.text();
       const lines = text.trim().split('\n');
-      console.log('[DEBUG lines] file:', f, 'line_count:', lines.length, 'first_ts:', lines[0] ? JSON.parse(lines[0]).timestamp : 'none');
       lines.forEach(line => { try { allData.push(JSON.parse(line)); } catch { } });
-    } catch (e) { console.warn('Fetch error for', f, e); }
+    } catch (e) { console.warn('Fetch error:', f, e); }
   }
-  console.log('[refresh] Machine:', hostname, 'Files:', files, 'Records:', allData.length, '| range:', range);
-  const beforeFilter = allData.length;
+
+  // ── Time-filter
   allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
-  console.log('[filter] before:', beforeFilter, 'after:', allData.length);
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   if (allData.length === 0) {
-    document.getElementById('updated').textContent = 'No data for this range on [' + hostname + ']. Collector may not be running.';
+    document.getElementById('updated').textContent =
+      'No data for this range on [' + hostname + ']. Collector may not be running.';
     return;
   }
 
-  const latest = allData[allData.length - 1];
-  document.getElementById('s-cpu').textContent = latest.cpu_percent.toFixed(1) + '%';
-  document.getElementById('s-cpu-sub').textContent = latest.cpu_percent.toFixed(1) + '%';
+  // ── Top-level stat cards (CPU + system memory are always single values)
+  const latest        = allData[allData.length - 1];
+  const cpuMean       = mean(allData.map(d => d.cpu_percent));
+  const memMean       = mean(allData.map(d => d.memory_percent));
+  const memUsedGB     = (latest.memory_used_mb / 1024).toFixed(1);
+  const memTotalGB    = (latest.memory_total_mb / 1024).toFixed(1);
 
-  const memPct = latest.memory_percent.toFixed(1);
-  const memUsed = (latest.memory_used_mb / 1024).toFixed(1);
-  const memTotal = (latest.memory_total_mb / 1024).toFixed(1);
-  document.getElementById('s-mem').textContent = memPct + '%';
-  document.getElementById('s-mem-sub').textContent = memUsed + ' / ' + memTotal + ' GB';
+  document.getElementById('s-cpu').textContent = cpuMean.toFixed(1) + '%';
+  document.getElementById('s-cpu-sub').textContent = 'latest: ' + latest.cpu_percent.toFixed(1) + '%';
+  document.getElementById('s-mem').textContent = memMean.toFixed(1) + '%';
+  document.getElementById('s-mem-sub').textContent = memUsedGB + ' / ' + memTotalGB + ' GB';
 
-  if (hasGpu && latest.gpu && !latest.gpu.error) {
-    const gpuPct = latest.gpu.utilization.toFixed(1);
-    const gpuMemPct = (latest.gpu.memory_used_mb / latest.gpu.memory_total_mb * 100).toFixed(1);
-    const gpuMemUsed = (latest.gpu.memory_used_mb / 1024).toFixed(1);
-    const gpuMemTotal = (latest.gpu.memory_total_mb / 1024).toFixed(1);
-    document.getElementById('s-gpu').textContent = gpuPct + '%';
-    document.getElementById('s-gpu-sub').textContent = latest.gpu.utilization.toFixed(1) + '%';
+  // ── GPU stat cards (aggregate across all GPUs)
+  if (hasGpu) {
+    const latestGpus = _normalizeGpus(latest.gpu);
+    const validGpus  = latestGpus.filter(g => !g.error);
+    const gpuUtilMean = validGpus.length ? mean(validGpus.map(g => g.utilization)) : 0;
+    const gpuUtilPct  = gpuUtilMean.toFixed(1);
+    const gpuUtilSub  = validGpus.map(g => 'GPU' + g.id + '=' + g.utilization.toFixed(0) + '%').join('  ');
+
+    const totalMemUsed = validGpus.reduce((s, g) => s + g.memory_used_mb, 0);
+    const totalMemTotal= validGpus.reduce((s, g) => s + g.memory_total_mb, 0);
+    const gpuMemPct    = totalMemTotal > 0 ? (totalMemUsed / totalMemTotal * 100).toFixed(1) : '0.0';
+    const gpuMemSub    = validGpus.map(g => 'GPU' + g.id + '=' + (g.memory_used_mb/1024).toFixed(1) + 'GB').join('  ');
+
+    document.getElementById('s-gpu').textContent     = gpuUtilPct + '%';
+    document.getElementById('s-gpu-sub').textContent = gpuUtilSub;
     document.getElementById('s-gpu-mem').textContent = gpuMemPct + '%';
-    document.getElementById('s-gpu-mem-sub').textContent = gpuMemUsed + ' / ' + gpuMemTotal + ' GB';
-    document.getElementById('gpu-stat-card').style.opacity = '1';
-    document.getElementById('gpu-mem-stat-card').style.opacity = '1';
+    document.getElementById('s-gpu-mem-sub').textContent = gpuMemSub;
   } else {
     ['s-gpu','s-gpu-mem'].forEach(id => document.getElementById(id).textContent = 'N/A');
     ['s-gpu-sub','s-gpu-mem-sub'].forEach(id => document.getElementById(id).textContent = 'No GPU');
-    document.getElementById('gpu-stat-card').style.opacity = '0.4';
-    document.getElementById('gpu-mem-stat-card').style.opacity = '0.4';
   }
 
-  function buildDataset(key, gpuKey, asPercent) {
-    return allData.filter(d => gpuKey ? (d.gpu && !d.gpu.error) : true)
-      .map(d => {
-        let y = gpuKey ? d.gpu[gpuKey] : d[key];
-        if (asPercent) y = d.gpu.memory_total_mb > 0 ? y / d.gpu.memory_total_mb * 100 : 0;
-        return { x: new Date(d.timestamp), y };
-      });
-  }
+  // ── Update CPU + Memory charts (single dataset)
+  charts.cpu.data.datasets[0].data = allData.map(d => ({ x: new Date(d.timestamp), y: d.cpu_percent }));
+  charts.mem.data.datasets[0].data  = allData.map(d => ({ x: new Date(d.timestamp), y: d.memory_percent }));
+  charts.cpu.update();
+  charts.mem.update();
 
-  if (!charts.cpu) {
-    document.getElementById('updated').textContent = 'Charts not initialized. See console errors.';
-    return;
-  }
+  // ── Update GPU charts (one dataset per GPU)
+  if (hasGpu) updateGpuChart(charts.gpu,      allData, 'utilization',    '%',  gpuCount);
+  if (hasGpu) updateGpuChart(charts['gpu-mem'], allData, 'memory_used_mb', 'MB', gpuCount);
 
-  charts.cpu.data.datasets[0].data = buildDataset('cpu_percent', null);
-  charts.mem.data.datasets[0].data = buildDataset('memory_percent', null);
-  charts.gpu.data.datasets[0].data = buildDataset(null, 'utilization');
-  charts['gpu-mem'].data.datasets[0].data = buildDataset(null, 'memory_used_mb', true);
-
-  Object.values(charts).forEach(c => c.update());
-  document.getElementById('updated').textContent = 'Updated: ' + new Date().toLocaleTimeString() + ' | ' + allData.length + ' data points | ' + currentMachine.hostname;
+  document.getElementById('updated').textContent =
+    'Updated: ' + new Date().toLocaleTimeString() +
+    ' | ' + allData.length + ' pts | ' + hostname;
 }
 
-document.getElementById('machine-select').addEventListener('change', e => setMachine(e.target.value));
+function _normalizeGpus(gpu) {
+  // Support both legacy {utilization, memory_used_mb} object and
+  // new-format [{id, utilization, memory_used_mb, ...}, ...]
+  if (!gpu) return [];
+  if (Array.isArray(gpu)) return gpu;
+  return [gpu];   // legacy single-GPU object
+}
 
+function updateGpuChart(chart, allData, valueKey, unit, gpuCount) {
+  // Show only as many datasets as this machine has GPUs
+  chart.data.datasets.forEach((ds, i) => { ds.hidden = i >= gpuCount; });
+  for (let i = 0; i < gpuCount; i++) {
+    chart.data.datasets[i].data = allData.map(d => {
+      const gpus = _normalizeGpus(d.gpu);
+      const g    = gpus[i];
+      let   y    = (g && !g.error) ? g[valueKey] : null;
+      if (valueKey === 'memory_used_mb') {
+        // Convert MB → % of that GPU's total memory
+        y = (g && !g.error && g.memory_total_mb > 0)
+          ? (g.memory_used_mb / g.memory_total_mb * 100) : null;
+      }
+      return (y != null) ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
+    });
+  }
+  chart.update();
+}
+
+function mean(arr) {
+  const valid = arr.filter(v => v != null && !isNaN(v));
+  return valid.length ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
+}
+
+// ─── Bootstrap ───────────────────────────────────────────────────────────────
+document.getElementById('machine-select').addEventListener('change', e => setMachine(e.target.value));
 initCharts();
 loadMachines().then(() => {
   refresh();
