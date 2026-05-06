@@ -210,7 +210,7 @@ async function loadMachines() {
       const opt = document.createElement('option');
       opt.value = m.hostname;
       const gpuDesc = m.gpu_count > 0
-        ? ` (${m.gpu_types ? m.gpu_types[0] : 'GPU'} x${m.gpu_count})`
+        ? ` (${m.gpu_type || 'GPU'} x${m.gpu_count})`
         : ' (no GPU)';
       opt.textContent = m.hostname + gpuDesc;
       sel.appendChild(opt);
