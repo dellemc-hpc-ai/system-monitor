@@ -200,39 +200,32 @@ async function refresh() {
   else if (range === 'day') cutoff = now - 86400 * 1000;
   else cutoff = now - 7 * 86400 * 1000;
 
+  // Use LOCAL date (not UTC) to match how collector.py names files (based on local timestamp)
   const d = new Date();
   const yd = new Date(d.getTime() - 86400000);
-  const today = d.getUTCFullYear().toString() + (d.getUTCMonth() + 1).toString().padStart(2, '0') + d.getUTCDate().toString().padStart(2, '0');
-  const yesterday = yd.getUTCFullYear().toString() + (yd.getUTCMonth() + 1).toString().padStart(2, '0') + yd.getUTCDate().toString().padStart(2, '0');
+  const today = d.getFullYear().toString() + (d.getMonth() + 1).toString().padStart(2, '0') + d.getDate().toString().padStart(2, '0');
+  const yesterday = yd.getFullYear().toString() + (yd.getMonth() + 1).toString().padStart(2, '0') + yd.getDate().toString().padStart(2, '0');
+  // Load both today and yesterday files for day view (data may span midnight local time)
   const files = ['data/metrics_' + hostname + '_' + today + '.json'];
-  if (range === 'week') files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
+  if (range === 'day' || range === 'week') files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
 
-  console.log('[DEBUG refresh] range:', range, '| now:', now, '| cutoff:', cutoff, '| cutoff_age_h:', ((now - cutoff)/3600000).toFixed(1), '| today:', today, '| yesterday:', yesterday, '| files:', JSON.stringify(files));
+  console.log('[refresh] range:', range, '| today:', today, '| yesterday:', yesterday, '| files:', JSON.stringify(files));
 
   let allData = [];
   for (const f of files) {
     try {
       const r = await fetch(f + '?t=' + now);
-      console.log('[DEBUG fetch]', f, 'status:', r.status, 'ok:', r.ok);
-      if (!r.ok) {
-        console.warn('Failed to fetch', f, r.status);
-        continue;
-      }
+      if (!r.ok) { console.warn('Failed to fetch', f, r.status); continue; }
       const text = await r.text();
       const lines = text.trim().split('\n');
       console.log('[DEBUG lines] file:', f, 'line_count:', lines.length, 'first_ts:', lines[0] ? JSON.parse(lines[0]).timestamp : 'none');
-      lines.forEach(line => {
-        try { allData.push(JSON.parse(line)); } catch { }
-      });
-    } catch (e) {
-      console.warn('Fetch error for', f, e);
-    }
+      lines.forEach(line => { try { allData.push(JSON.parse(line)); } catch { } });
+    } catch (e) { console.warn('Fetch error for', f, e); }
   }
-  console.log('[DEBUG] Machine:', hostname, 'Files tried:', files, 'Total records loaded:', allData.length, '| range:', range);
-
+  console.log('[refresh] Machine:', hostname, 'Files:', files, 'Records:', allData.length, '| range:', range);
   const beforeFilter = allData.length;
   allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
-  console.log('[DEBUG filter] before:', beforeFilter, 'after:', allData.length, 'cutoff_ts:', new Date(cutoff).toISOString());
+  console.log('[filter] before:', beforeFilter, 'after:', allData.length);
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   if (allData.length === 0) {
