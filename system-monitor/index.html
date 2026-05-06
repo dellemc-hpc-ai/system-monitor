@@ -34,6 +34,8 @@
   .mem-val { color: #ba68c8; }
   .gpu-val { color: #81c784; }
   .gpu-mem-val { color: #ffb74d; }
+  .power-val { color: #ff7043; }
+  .net-val { color: #26c6da; }
   .updated { font-size: 0.75rem; color: #555; margin-top: 8px; }
   .loading { opacity: 0.5; pointer-events: none; }
   .gpu-tag { font-size: 0.7rem; background: #2d6cdf; color: #fff; padding: 2px 8px; border-radius: 4px; margin-left: 8px; }
@@ -82,6 +84,16 @@
     <span class="stat-value gpu-mem-val" id="s-gpu-mem">--%</span>
     <span class="stat-sub" id="s-gpu-mem-sub">--</span>
   </div>
+  <div class="stat-card" id="power-stat-card">
+    <span class="stat-label">GPU Power</span>
+    <span class="stat-value gpu-power-val" id="s-power">-- W</span>
+    <span class="stat-sub" id="s-power-sub">--</span>
+  </div>
+  <div class="stat-card" id="net-stat-card">
+    <span class="stat-label">Network RX/TX</span>
+    <span class="stat-value net-val" id="s-net">-- MB/s</span>
+    <span class="stat-sub" id="s-net-sub">--</span>
+  </div>
 </div>
 
 <div class="charts">
@@ -104,6 +116,14 @@
   <div class="chart-card" id="io-chart-card">
     <h3>GPU0 PCIe + NVLink (MB/s)</h3>
     <div class="chart-wrapper"><canvas id="chart-io"></canvas></div>
+  </div>
+  <div class="chart-card" id="power-chart-card">
+    <h3>GPU Power (W)</h3>
+    <div class="chart-wrapper"><canvas id="chart-power"></canvas></div>
+  </div>
+  <div class="chart-card" id="net-chart-card">
+    <h3>Network RX/TX (MB/s)</h3>
+    <div class="chart-wrapper"><canvas id="chart-net"></canvas></div>
   </div>
 </div>
 <p class="updated" id="updated"></p>
@@ -139,6 +159,28 @@ function initCharts() {
   charts['gpu-mem'] = buildGpuChart('chart-gpu-mem', GPU_COLORS, 'memory_used_mb', 'MB');
   // PCIe + NVLink IO chart (GPU0 only, 4 datasets: PCIe RX/TX, NVLink RX/TX)
   charts.io = buildIoChart('chart-io');
+  // GPU Power chart (one dataset per GPU, up to 8). Y-axis has no upper cap.
+  const powerCtx = document.getElementById('chart-power').getContext('2d');
+  const powerDatasets = Array.from({ length: 8 }, (_, i) => {
+    const color = GPU_COLORS[i % GPU_COLORS.length];
+    const grad = powerCtx.createLinearGradient(0, 0, 0, 220);
+    grad.addColorStop(0, '#' + color + '55');
+    grad.addColorStop(1, '#' + color + '00');
+    return { label: 'GPU' + i, data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 1.5, hidden: i > 0 };
+  });
+  charts.power = new Chart(powerCtx, {
+    type: 'line',
+    data: { datasets: powerDatasets },
+    options: {
+      ...chartOptions(),
+      scales: {
+        ...chartOptions().scales,
+        y: { min: 0, grid: { color: '#252a3a' }, ticks: { color: '#666' } }
+      }
+    }
+  });
+  // Network chart (up to 8 interfaces × 2 = 16 datasets: RX/TX per iface)
+  charts.net = buildNetworkChart('chart-net');
 }
 
 const IO_COLORS = {
@@ -147,6 +189,49 @@ const IO_COLORS = {
   nvlrx:  '4dd0e1',   // cyan
   nvltx:  '26c6da',   // dark cyan
 };
+
+// Up to 8 network interfaces × 2 (RX, TX). Colors paired per interface.
+const NET_COLORS = [
+  ['4fc3f7', '0288d1'],  // iface 0: light/dark blue   (RX/TX)
+  ['81c784', '2e7d32'],  // iface 1: light/dark green
+  ['ffb74d', 'e64a19'],  // iface 2: light/dark orange
+  ['ce93d8', '7b1fa2'],  // iface 3: light/dark purple
+  ['f06292', 'c62828'],  // iface 4: light/dark red
+  ['aed581', '558b2f'],  // iface 5: light/dark lime
+  ['80cbc4', '00695c'],  // iface 6: light/dark teal
+  ['fff176', 'f9a825'],  // iface 7: light/dark yellow
+];
+
+function buildNetworkChart(canvasId) {
+  const MAX_IFACES = 8;
+  const datasets = [];
+  for (let i = 0; i < MAX_IFACES; i++) {
+    const [rxColor, txColor] = NET_COLORS[i % NET_COLORS.length];
+    // RX dataset (solid line), TX dataset (dashed line)
+    datasets.push({
+      label: `_rx${i}`, data: [], borderColor: '#' + rxColor,
+      backgroundColor: 'transparent', borderWidth: 1.5, hidden: true,
+      borderDash: []
+    });
+    datasets.push({
+      label: `_tx${i}`, data: [], borderColor: '#' + txColor,
+      backgroundColor: 'transparent', borderWidth: 1.5, hidden: true,
+      borderDash: [5, 3]
+    });
+  }
+  const chart = new Chart(document.getElementById(canvasId), {
+    type: 'line',
+    data: { datasets },
+    options: {
+      ...chartOptions(),
+      scales: {
+        ...chartOptions().scales,
+        y: { min: 0, grid: { color: '#252a3a' }, ticks: { color: '#666' } }
+      }
+    }
+  });
+  return chart;
+}
 
 function buildIoChart(canvasId) {
   const datasets = [
@@ -270,6 +355,8 @@ async function refresh() {
   document.getElementById('gpu-stat-card').style.opacity    = gpuOpacity;
   document.getElementById('gpu-mem-stat-card').style.opacity = gpuOpacity;
   document.getElementById('io-chart-card').style.opacity     = hasGpu ? '1' : '0.4';
+  document.getElementById('power-chart-card').style.opacity  = hasGpu ? '1' : '0.4';
+  document.getElementById('power-stat-card').style.opacity   = hasGpu ? '1' : '0.4';
 
   // Determine which data files to load.
   // We always load 'today' (current UTC date file). For day/week views we also load
@@ -357,9 +444,28 @@ async function refresh() {
     document.getElementById('s-gpu-sub').textContent = gpuUtilSub;
     document.getElementById('s-gpu-mem').textContent = gpuMemPct + '%';
     document.getElementById('s-gpu-mem-sub').textContent = gpuMemSub;
+
+    // ── GPU Power stat card
+    const gpuPower = latest.gpu_power || [];
+    const totalPowerW = gpuPower.reduce((s, g) => s + (g.power_w || 0), 0);
+    const powerSub = gpuPower.map(g => 'GPU' + g.id + '=' + (g.power_w || '?') + 'W').join('  ');
+    document.getElementById('s-power').textContent = totalPowerW.toFixed(1) + ' W';
+    document.getElementById('s-power-sub').textContent = powerSub;
   } else {
     ['s-gpu','s-gpu-mem'].forEach(id => document.getElementById(id).textContent = 'N/A');
     ['s-gpu-sub','s-gpu-mem-sub'].forEach(id => document.getElementById(id).textContent = 'No GPU');
+  }
+
+  // ── Network stat card (aggregate RX+TX across all ifaces, latest sample)
+  const netData = latest.network || [];
+  if (netData.length > 0) {
+    const totalRx = netData.reduce((s, n) => s + (n.rx_mbs || 0), 0);
+    const totalTx = netData.reduce((s, n) => s + (n.tx_mbs || 0), 0);
+    document.getElementById('s-net').textContent = totalRx.toFixed(2) + ' / ' + totalTx.toFixed(2) + ' MB/s';
+    document.getElementById('s-net-sub').textContent = netData.map(n => n.name + '=' + n.rx_mbs.toFixed(1) + '/' + n.tx_mbs.toFixed(1)).join('  ');
+  } else {
+    document.getElementById('s-net').textContent = 'N/A';
+    document.getElementById('s-net-sub').textContent = 'No network data';
   }
 
   // ── Update CPU + Memory charts (single dataset)
@@ -374,6 +480,12 @@ async function refresh() {
 
   // ── Update PCIe/NVLink IO chart (GPU0 only)
   updateIoChart(allData);
+
+  // ── Update GPU Power chart (one dataset per GPU)
+  if (hasGpu) updatePowerChart(allData, gpuCount);
+
+  // ── Update Network chart (all ifaces, RX + TX)
+  updateNetworkChart(allData);
 
   document.getElementById('updated').textContent =
     'Updated: ' + new Date().toLocaleTimeString() +
@@ -430,6 +542,65 @@ function updateIoChart(allData) {
   charts.io.data.datasets[2].hidden = !hasNvlink;  // NVLink RX
   charts.io.data.datasets[3].hidden = !hasNvlink;  // NVLink TX
   charts.io.update();
+}
+
+function updatePowerChart(allData, gpuCount) {
+  // gpu_power is an array of {id, power_w, power_limit_w} in the record
+  charts.power.data.datasets.forEach((ds, i) => { ds.hidden = i >= gpuCount; });
+  for (let i = 0; i < gpuCount; i++) {
+    charts.power.data.datasets[i].data = allData.map(d => {
+      const gp = (d.gpu_power || [])[i];
+      const y  = (gp && gp.power_w != null) ? gp.power_w : null;
+      return y != null ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
+    });
+  }
+  charts.power.update();
+}
+
+function updateNetworkChart(allData) {
+  // network is an array of {name, rx_mbs, tx_mbs} in the record.
+  // Discover which ifaces appear across all records, preserve consistent ordering.
+  const ifaceOrder = [];
+  const ifaceSet   = new Set();
+  for (const d of allData) {
+    for (const n of (d.network || [])) {
+      if (!ifaceSet.has(n.name)) { ifaceSet.add(n.name); ifaceOrder.push(n.name); }
+    }
+  }
+  const MAX = 8;
+  ifaceOrder.slice(0, MAX).forEach((name, idx) => {
+    const [rxColor, txColor] = NET_COLORS[idx % NET_COLORS.length];
+    // RX
+    const rxDs = charts.net.data.datasets[idx * 2];
+    rxDs.label        = name + ' RX';
+    rxDs.borderColor  = '#' + rxColor;
+    rxDs.backgroundColor = 'transparent';
+    rxDs.hidden        = false;
+    rxDs.data = allData.map(d => {
+      const entry = (d.network || []).find(n => n.name === name);
+      const y = (entry && entry.rx_mbs != null) ? entry.rx_mbs : null;
+      return y != null ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
+    });
+    // TX
+    const txDs = charts.net.data.datasets[idx * 2 + 1];
+    txDs.label        = name + ' TX';
+    txDs.borderColor  = '#' + txColor;
+    txDs.backgroundColor = 'transparent';
+    txDs.hidden        = false;
+    txDs.data = allData.map(d => {
+      const entry = (d.network || []).find(n => n.name === name);
+      const y = (entry && entry.tx_mbs != null) ? entry.tx_mbs : null;
+      return y != null ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
+    });
+  });
+  // Hide unused slots
+  for (let i = ifaceOrder.length; i < MAX; i++) {
+    charts.net.data.datasets[i * 2].hidden     = true;
+    charts.net.data.datasets[i * 2 + 1].hidden = true;
+    charts.net.data.datasets[i * 2].data     = [];
+    charts.net.data.datasets[i * 2 + 1].data = [];
+  }
+  charts.net.update();
 }
 
 function mean(arr) {
