@@ -50,8 +50,10 @@ pip install psutil
 ### 2. Start the collector
 
 ```bash
-# Run once to test:
+# Run once to test (interval in seconds, default is 10):
 python3 collector.py 10   # 10-second interval
+python3 collector.py 5    # 5-second interval
+python3 collector.py 1    # 1-second interval (high-frequency, large data files)
 
 # Or install as a systemd service (auto-starts on boot):
 sudo cp system-monitor.service /etc/systemd/system/
@@ -103,10 +105,14 @@ git push origin main
   "memory_used_mb": 52340.5,
   "memory_total_mb": 1048576.0,
   "gpu": [
-    { "id": 0, "utilization": 98.0, "memory_used_mb": 76000.0, "memory_total_mb": 81920.0 },
-    { "id": 1, "utilization": 97.5, "memory_used_mb": 74000.0, "memory_total_mb": 81920.0 },
-    { "id": 2, "utilization": 0.0,  "memory_used_mb": 200.0,  "memory_total_mb": 81920.0 },
-    { "id": 3, "utilization": 0.0,  "memory_used_mb": 200.0,  "memory_total_mb": 81920.0 }
+    { "id": 0, "utilization": 98.0, "memory_used_mb": 76000.0, "memory_total_mb": 81920.0,
+      "rxpci_mbs": 123.4, "txpci_mbs": 456.7, "nvlrx_mbs": 1024.5, "nvltx_mbs": 1024.5 },
+    { "id": 1, "utilization": 97.5, "memory_used_mb": 74000.0, "memory_total_mb": 81920.0,
+      "rxpci_mbs": 98.2, "txpci_mbs": 401.1, "nvlrx_mbs": 1024.5, "nvltx_mbs": 1024.5 },
+    { "id": 2, "utilization": 0.0,  "memory_used_mb": 200.0,  "memory_total_mb": 81920.0,
+      "rxpci_mbs": 0.0, "txpci_mbs": 0.0, "nvlrx_mbs": null, "nvltx_mbs": null },
+    { "id": 3, "utilization": 0.0,  "memory_used_mb": 200.0,  "memory_total_mb": 81920.0,
+      "rxpci_mbs": 0.0, "txpci_mbs": 0.0, "nvlrx_mbs": null, "nvltx_mbs": null }
   ]
 }
 ```
@@ -137,6 +143,10 @@ Each line in `data/metrics_<hostname>_<YYYYMMDD>.json`:
 | `utilization` | float | GPU utilization % (0–100) |
 | `memory_used_mb` | float | GPU memory used (MB) |
 | `memory_total_mb` | float | GPU memory total (MB) |
+| `rxpci_mbs` | float or null | PCIe RX throughput (MB/s); null if N/A (e.g. consumer GPU) |
+| `txpci_mbs` | float or null | PCIe TX throughput (MB/s); null if N/A |
+| `nvlrx_mbs` | float or null | NVLink RX throughput (MiB/s); null if no NVLink |
+| `nvltx_mbs` | float or null | NVLink TX throughput (MiB/s); null if no NVLink |
 | `error` | string | Present if nvidia-smi query failed |
 
 ## Project Files
