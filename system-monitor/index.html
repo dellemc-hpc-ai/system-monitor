@@ -235,16 +235,34 @@ async function refresh() {
   document.getElementById('gpu-stat-card').style.opacity    = gpuOpacity;
   document.getElementById('gpu-mem-stat-card').style.opacity = gpuOpacity;
 
-  // ── Determine which data files to load (local date, yesterday for day/week)
+  // Determine which data files to load.
+  // We always load 'today' (current UTC date file). For day/week views we also load
+  // the previous UTC date file to cover the local-day boundary — in timezones with a
+  // negative UTC offset (e.g. CDT = UTC-5), a local day starts at UTC 05:00, so
+  // the early-morning hours (00:00–04:59 local) live in the *next* UTC date file.
   const now       = Date.now();
   const cutoff    = now - (RANGES[currentRange] * 1000);
   const d         = new Date();
   const yd        = new Date(d.getTime() - 86400000);
-  const today     = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-  const yesterday = yd.getFullYear() + String(yd.getMonth()+1).padStart(2,'0') + String(yd.getDate()).padStart(2,'0');
-  const files     = ['data/metrics_' + hostname + '_' + today + '.json'];
-  if (currentRange === 'day' || currentRange === 'week')
-    files.push('data/metrics_' + hostname + '_' + yesterday + '.json');
+
+  // Current and previous UTC date strings (files are named by UTC date)
+  const todayUTC     = d.toISOString().slice(0,10).replace(/-/g,'');           // e.g. 20260506
+  const yesterdayUTC = yd.toISOString().slice(0,10).replace(/-/g,'');          // e.g. 20260505
+
+  // Local date strings (used for display labels only)
+  const todayLocal     = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  const yesterdayLocal = yd.getFullYear() + String(yd.getMonth()+1).padStart(2,'0') + String(yd.getDate()).padStart(2,'0');
+
+  const files = ['data/metrics_' + hostname + '_' + todayUTC + '.json'];
+  if (currentRange === 'day') {
+    // For day view: load today + the *previous UTC date* file.
+    // This captures the 00:00–04:59 local hours that live in yesterday's UTC file
+    // when UTC offset is negative (e.g. CDT = UTC-5).
+    files.push('data/metrics_' + hostname + '_' + yesterdayUTC + '.json');
+  } else if (currentRange === 'week') {
+    // For week view: load today + yesterday (local dates)
+    files.push('data/metrics_' + hostname + '_' + yesterdayLocal + '.json');
+  }
 
   // ── Fetch & parse
   let allData = [];
