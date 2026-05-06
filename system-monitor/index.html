@@ -240,28 +240,34 @@ async function refresh() {
   // the previous UTC date file to cover the local-day boundary — in timezones with a
   // negative UTC offset (e.g. CDT = UTC-5), a local day starts at UTC 05:00, so
   // the early-morning hours (00:00–04:59 local) live in the *next* UTC date file.
-  const now       = Date.now();
-  const cutoff    = now - (RANGES[currentRange] * 1000);
-  const d         = new Date();
-  const yd        = new Date(d.getTime() - 86400000);
+  // Generate UTC date strings going back N days from today (inclusive).
+  // Files are named by UTC date, so we need UTC dates to find the right files.
+  function getUTCDateStrings(daysBack) {
+    const d = new Date();
+    return Array.from({ length: daysBack }, (_, i) => {
+      const date = new Date(d.getTime() - i * 86400000);
+      return date.toISOString().slice(0, 10).replace(/-/g, '');
+    });
+  }
 
-  // Current and previous UTC date strings (files are named by UTC date)
-  const todayUTC     = d.toISOString().slice(0,10).replace(/-/g,'');           // e.g. 20260506
-  const yesterdayUTC = yd.toISOString().slice(0,10).replace(/-/g,'');          // e.g. 20260505
-
-  // Local date strings (used for display labels only)
-  const todayLocal     = d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
-  const yesterdayLocal = yd.getFullYear() + String(yd.getMonth()+1).padStart(2,'0') + String(yd.getDate()).padStart(2,'0');
-
+  // Build file list. Always include today (current UTC date).
+  // For day: today + yesterday UTC  (covers local 00:00–04:59 boundary)
+  // For week: last 7 UTC dates       (covers a full week of UTC files)
+  const now    = Date.now();
+  const cutoff = now - (RANGES[currentRange] * 1000);
+  const d     = new Date();
+  const yd    = new Date(d.getTime() - 86400000);
+  const todayUTC     = d.toISOString().slice(0, 10).replace(/-/g, '');
+  const yesterdayUTC = yd.toISOString().slice(0, 10).replace(/-/g, '');
   const files = ['data/metrics_' + hostname + '_' + todayUTC + '.json'];
   if (currentRange === 'day') {
-    // For day view: load today + the *previous UTC date* file.
-    // This captures the 00:00–04:59 local hours that live in yesterday's UTC file
-    // when UTC offset is negative (e.g. CDT = UTC-5).
     files.push('data/metrics_' + hostname + '_' + yesterdayUTC + '.json');
   } else if (currentRange === 'week') {
-    // For week view: load today + yesterday (local dates)
-    files.push('data/metrics_' + hostname + '_' + yesterdayLocal + '.json');
+    // Load the last 7 UTC date files so the week chart has full coverage.
+    const weekFiles = getUTCDateStrings(7).slice(1); // already have today, drop it
+    weekFiles.forEach(f => {
+      if (!files.includes(f)) files.push('data/metrics_' + hostname + '_' + f + '.json');
+    });
   }
 
   // ── Fetch & parse
