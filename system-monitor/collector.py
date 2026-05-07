@@ -8,6 +8,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import time
 import threading
 from datetime import datetime, timezone
@@ -172,10 +173,13 @@ def get_gpu_io():
         )
         if result.returncode != 0:
             return None
-    except Exception:
+    except Exception as e:
+        sys.stderr.write(f"[get_gpu_io] exception: {e}\n")
         return None
 
-    col_map = {}   # metric name (lowercase) -> column index in data part
+    sys.stderr.write(f"[get_gpu_io] raw output:\n{result.stdout}\n")
+
+    col_map = {}   # metric name (lowercase) -> column index in data_cols
     gpus_io = {}  # gpu_id -> {rxpci_mbs, txpci_mbs, nvlrx_mbs, nvltx_mbs}
 
     for line in result.stdout.strip().splitlines():
@@ -191,13 +195,13 @@ def get_gpu_io():
             metric_names = {"rxpci", "txpci", "nvlrx", "nvltx", "pcirx", "pcitx"}
             header_cols = [c.lower() for c in parts]
             if metric_names & set(header_cols):
-                # This is the header row — find metric column positions.
-                # Header cols include "#Time" (or just "#") at index 0, then "gpu",
-                # then metrics.  We subtract 1 from full-line indices so that
-                # data_cols = parts[1:] (skipping only the gpu-id column) works.
-                for idx, col in enumerate(header_cols):
-                    if col in metric_names:
-                        col_map[col] = idx - 1
+                # This is the metric-names header row.
+                # Build col_map relative to data columns (parts[1:]) so offsets
+                # are always correct regardless of whether the line starts with
+                # "#" (no timestamp) or "#Time" (timestamp present).
+                for idx, col in enumerate(parts[1:]):   # data-col offset from parts[1]
+                    if col.lower() in metric_names:
+                        col_map[col.lower()] = idx
             continue
 
         if not parts[0].isdigit():
