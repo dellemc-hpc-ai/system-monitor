@@ -1,53 +1,90 @@
 # rsync-tree
 
-Parallel rsync distribution for `/mnt/data` across node001–node018.
+Event-driven parallel rsync tree for `/mnt/data` across node001–node018.
 
 ## Problem
 
-~500 GB needs to go from a single source node (e.g. `node012`) to 17 other nodes, over a 100 MB/s link. A naive sequential copy takes ~1.4 hours minimum. We want to saturate the link from the start.
+~500 GB needs to go from a single source node (e.g. `node012`) to 17 other nodes, over a 100 MB/s link. A naive sequential copy takes ~1.4 hours minimum. We want to saturate each node's eth at 100 MB/s from the start.
 
-## Algorithm: Flood & Branch
+## Algorithm: Event-Driven Binary Tree
+
+Each node transitions: **waiting → active → ready (as new source)**.
+
+The main loop constantly checks for completed jobs. As soon as any node finishes receiving data, it immediately starts sending to the next unassigned node — no waiting for a "round" or "wave" to finish.
 
 ```
-Phase 1 (Flood)    node012 ──→ node001
-                   node012 ──→ node002     (8 parallel streams,
-                   node012 ──→ node003        saturating 100MB/s)
-                   node012 ──→ ...
-                   node012 ──→ node008
-
-Phase 2 (Branch)   node012 ──→ node009
-                   node001  ──→ node010     (8 ready nodes → 8 targets)
-                   node002  ──→ node011
-                   ...
-
-Phase 3            all 17 nodes ──→ remaining nodes
+node012 → node001   (T min later node001 is ready)
+node012 → node002,  node001 → node003     (2 parallel, T min)
+node012 → node004,  node001 → node005,
+node002 → node006,  node003 → node007     (4 parallel, T min)
+...                                          (8 parallel, T min)
+...                                          (all active, T min)
+Total: log2(17) × T ≈ 5 × T ≈ 208 min
+Each rsync is always at full 100 MB/s — no eth splitting.
 ```
-
-Each node that receives the full data becomes a new source immediately. Parallelism doubles each phase, so the total time approaches the single-link minimum while fully utilizing the 100 MB/s pipe.
 
 ## Usage
 
 ```bash
-# Dry run first
+# Dry run (simulates, doesn't actually sync)
 ./rsync-tree.sh --dry-run
 
-# Real run, default source (node012), 8 parallel
+# Real run — default: source=node12, pattern='node[01-18]'
 ./rsync-tree.sh
 
-# Custom source and parallelism
-./rsync-tree.sh --source node007 --parallel 6
+# Specify source and node pattern
+./rsync-tree.sh --source node12 --nodes 'node0[01-18]'
+
+# Custom directory
+./rsync-tree.sh --dir /data/shared
+```
+
+### Node Pattern Examples
+
+```bash
+# node001 .. node018 (zero-padded to 2 digits — "01" has leading zero)
+--nodes 'node[01-18]'
+
+# node001 .. node018 (zero-padded to 3 digits — "001" has leading zeros)
+--nodes 'node0[01-18]'
+
+# compute0 .. compute7
+--nodes 'compute[0-7]'
+
+# rack01 .. rack48 (2-digit padding from "01")
+--nodes 'rack[01-48]'
+
+# n1 .. n8 (plain numbers, no zero-padding)
+--nodes 'n[1..8]'
+
+# Explicit comma-separated list
+--nodes 'server1,server2,server3,server4'
+
+# Single node (source must be in the list)
+--nodes 'myhost'
 ```
 
 ## Requirements
 
 - SSH passwordless access to all target nodes
 - `rsync` installed on source and all targets
-- `sudo rsync` on targets (for preserving permissions) — or remove `--rsync-path` flag
+- `sudo rsync` on targets (for preserving permissions) — or remove `--rsync-path` flag from the script
 - Sufficient disk space on all targets
 
-## How it works
+## How It Works
 
-1. **Flood phase**: source pushes to up to `PARALLEL` targets simultaneously
-2. Each completed node becomes a source
-3. **Branch phase**: all ready nodes push to remaining targets in parallel
-4. Repeat until all 18 nodes have the data
+1. Source node is marked **ready**; all others are **waiting**
+2. Each iteration: pair every free ready source with one waiting node and start rsync
+3. Each completed node moves from **active** → **ready**
+4. Repeat until waiting list is empty and all active jobs finish
+5. Result: parallelism grows organically as nodes complete — never a round boundary
+
+## Timing
+
+With 100 MB/s link and 500 GB to distribute:
+
+| Scenario | Total Time |
+|----------|-----------|
+| Sequential (1→1→1) | ~667 min |
+| Naive 8-way flood (12.5 MB/s each) | ~83 min before wave 2 |
+| **Event-driven binary tree** | **~208 min** |
