@@ -35,6 +35,7 @@
   .gpu-val { color: #81c784; }
   .gpu-mem-val { color: #ffb74d; }
   .power-val { color: #ff7043; }
+  .sys-power-val { color: #ffca28; }
   .net-val { color: #26c6da; }
   .updated { font-size: 0.75rem; color: #555; margin-top: 8px; }
   .loading { opacity: 0.5; pointer-events: none; }
@@ -88,6 +89,11 @@
     <span class="stat-label">GPU Power</span>
     <span class="stat-value gpu-power-val" id="s-power">-- W</span>
     <span class="stat-sub" id="s-power-sub">--</span>
+  </div>
+  <div class="stat-card" id="sys-power-stat-card">
+    <span class="stat-label">System Power</span>
+    <span class="stat-value sys-power-val" id="s-sys-power">-- W</span>
+    <span class="stat-sub" id="s-sys-power-sub">--</span>
   </div>
   <div class="stat-card" id="net-stat-card">
     <span class="stat-label">Network RX/TX</span>
@@ -168,6 +174,12 @@ function initCharts() {
     grad.addColorStop(1, '#' + color + '00');
     return { label: 'GPU' + i, data: [], borderColor: '#' + color, backgroundColor: grad, fill: true, borderWidth: 1.5, hidden: i > 0 };
   });
+  // System Power as dataset index 8 (dashed amber line, always visible when available)
+  const SYS_POWER_COLOR = 'ffca28';
+  const sysGrad = powerCtx.createLinearGradient(0, 0, 0, 220);
+  sysGrad.addColorStop(0, '#' + SYS_POWER_COLOR + '33');
+  sysGrad.addColorStop(1, '#' + SYS_POWER_COLOR + '00');
+  powerDatasets.push({ label: 'System', data: [], borderColor: '#' + SYS_POWER_COLOR, backgroundColor: sysGrad, fill: true, borderWidth: 2, borderDash: [5, 3], hidden: false });
   charts.power = new Chart(powerCtx, {
     type: 'line',
     data: { datasets: powerDatasets },
@@ -456,6 +468,16 @@ async function refresh() {
     ['s-gpu-sub','s-gpu-mem-sub'].forEach(id => document.getElementById(id).textContent = 'No GPU');
   }
 
+  // ── System Power stat card (always shown, independent of GPU presence)
+  const sysPwr = latest.system_power_w;
+  if (sysPwr != null) {
+    document.getElementById('s-sys-power').textContent = sysPwr.toFixed(1) + ' W';
+    document.getElementById('s-sys-power-sub').textContent = 'BMC / IPMI';
+  } else {
+    document.getElementById('s-sys-power').textContent = 'N/A';
+    document.getElementById('s-sys-power-sub').textContent = 'No BMC';
+  }
+
   // ── Network stat card (aggregate RX+TX across all ifaces, latest sample)
   const netData = latest.network || [];
   if (netData.length > 0) {
@@ -546,7 +568,10 @@ function updateIoChart(allData) {
 
 function updatePowerChart(allData, gpuCount) {
   // gpu_power is an array of {id, power_w, power_limit_w} in the record
-  charts.power.data.datasets.forEach((ds, i) => { ds.hidden = i >= gpuCount; });
+  charts.power.data.datasets.forEach((ds, i) => {
+    if (i < 8) ds.hidden = i >= gpuCount;   // GPU datasets
+    // dataset 8 = System Power — always visible when data exists (hidden handled below)
+  });
   for (let i = 0; i < gpuCount; i++) {
     charts.power.data.datasets[i].data = allData.map(d => {
       const gp = (d.gpu_power || [])[i];
@@ -554,6 +579,14 @@ function updatePowerChart(allData, gpuCount) {
       return y != null ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
     });
   }
+  // System Power (dataset index 8): show only when data is available
+  const sysDs = charts.power.data.datasets[8];
+  const sysHasData = allData.some(d => d.system_power_w != null);
+  sysDs.hidden = !sysHasData;
+  sysDs.data = allData.map(d => {
+    const y = d.system_power_w != null ? d.system_power_w : null;
+    return y != null ? { x: new Date(d.timestamp), y } : { x: new Date(d.timestamp), y: null };
+  });
   charts.power.update();
 }
 
