@@ -146,6 +146,50 @@ def get_gpu_power():
     return gpus
 
 
+# ─── GPU PCIe + NVLink throughput (nvidia-smi dmon, no sudo) ──────────────────
+
+_GPU_IO_PREV = {}   # gpu_id -> {rxpci, txpci, nvlrx, nvltx}
+
+
+def get_gpu_io():
+    """
+    Returns list of dicts with PCIe/NVLink throughput in MB/s per GPU,
+    or None if nvidia-smi dmon is unavailable.
+    Uses: nvidia-smi dmon -s t --gpm-metrics 60,61 -c 1
+    """
+    if not GPU_AVAILABLE or GPU_COUNT == 0:
+        return None
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "1"],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode != 0:
+            return None
+    except Exception:
+        return None
+
+    gpus_io = {}   # gpu_id -> dict
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or line.startswith("gpu"):
+            continue
+        parts = line.split()
+        if len(parts) < 5:
+            continue
+        try:
+            gpu_id = int(parts[0])
+            rxpci  = float(parts[1])
+            txpci  = float(parts[2])
+            nvlrx  = None if parts[3] == "-" else float(parts[3])
+            nvltx  = None if parts[4] == "-" else float(parts[4])
+            gpus_io[gpu_id] = {"id": gpu_id, "rxpci_mbs": rxpci, "txpci_mbs": txpci,
+                                 "nvlrx_mbs": nvlrx, "nvltx_mbs": nvltx}
+        except (ValueError, IndexError):
+            continue
+    return [gpus_io.get(i, {}) for i in range(GPU_COUNT)]
+
+
 # ─── Network throughput (rx/tx bytes delta, no sudo) ───────────────────────────
 
 _NET_PREV = {}   # iface -> (rx_bytes, tx_bytes, timestamp)
@@ -294,8 +338,17 @@ def collect():
     mem = psutil.virtual_memory()
     net = _get_net_throughput_mbs()
     gpu_power = get_gpu_power()
-    sys_power = get_system_power()   # BMC / IPMI, may be None
-    cpu_power = get_cpu_power()      # RAPL, may be None
+    gpu_io    = get_gpu_io()       # PCIe/NVLink, may be None
+    sys_power = get_system_power()  # BMC / IPMI, may be None
+    cpu_power = get_cpu_power()     # RAPL, may be None
+
+    # Merge GPU stats with power and IO data per GPU id
+    gpu_stats = get_gpu_stats()
+    if gpu_io:
+        io_by_id = {g["id"]: g for g in gpu_io}
+        for g in gpu_stats:
+            g.update(io_by_id.get(g["id"], {}))
+
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": HOSTNAME,
@@ -306,9 +359,9 @@ def collect():
         "memory_total_mb": mem.total / (1024 ** 2),
         "network": net,
         "system_power_w": sys_power,  # BMC whole-machine AC power
-        "cpu_power_w": cpu_power,      # RAPL CPU package power
+        "cpu_power_w": cpu_power,     # RAPL CPU package power
         "gpu_power": gpu_power,
-        "gpu": get_gpu_stats()
+        "gpu": gpu_stats
     }
     return stats
 
