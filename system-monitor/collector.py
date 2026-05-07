@@ -155,12 +155,12 @@ def get_gpu_io():
     Returns list of dicts with PCIe and NVLink throughput in MB/s per GPU,
     or None if nvidia-smi dmon is unavailable.
 
-    Command: nvidia-smi dmon -s t --gpm-metrics 60,61 -c 3 -o T
+    Command: nvidia-smi dmon -s t --gpm-metrics 60,61 -c 4 -o T
       - -s t              → PCIe RX/TX: columns "rxpci" (MB/s), "txpci" (MB/s)
       - --gpm-metrics 60,61 → NVLink RX/TX: columns "nvlrx"/"nvltx" (GPM:MiB/s)
-                               Note: NVLink may output null for the first 2 samples
-                               on some GPUs (B300); we collect 3 samples and use the last.
-      - -c 3              → 3 samples; NVLink needs the last one to have valid data
+                               Note: NVLink may output null for the first 3 samples
+                               on some GPUs (B300); we collect 4 samples and use the last.
+      - -c 4              → 4 samples; NVLink counters may need 3+ samples on B300
       - -o T              → include timestamp column
 
     Output columns:
@@ -171,7 +171,7 @@ def get_gpu_io():
         return None
     try:
         result = subprocess.run(
-            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "3", "-o", "T"],
+            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "4", "-o", "T"],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
