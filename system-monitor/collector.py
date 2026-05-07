@@ -30,14 +30,12 @@ def _probe_gpu():
     try:
         result = subprocess.run(
             ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
-            capture_output=True, text=True, check=True
+            capture_output=True, text=True, check=True, timeout=5
         )
-        names = result.stdout.strip().split("\n")
-        GPU_COUNT = len(names)
-        if GPU_COUNT > 8:
-            GPU_COUNT = 8
-        if names:
-            GPU_TYPE = names[0].strip()
+        raw = result.stdout.strip().split("\n")[0].strip()
+        # Strip leading "NVIDIA " prefix, replace spaces with underscores
+        GPU_TYPE = raw[7:].strip().replace(" ", "_") if raw.startswith("NVIDIA ") else raw.replace(" ", "_")
+        GPU_COUNT = min(8, len([n for n in result.stdout.strip().split("\n") if n.strip()]))
     except Exception:
         GPU_AVAILABLE = False
         print("nvidia-smi not available, GPU metrics disabled.")
@@ -170,23 +168,39 @@ def get_gpu_io():
         return None
 
     gpus_io = {}   # gpu_id -> dict
+    col_map = {}   # metric_name -> col_index (0-based, data part only)
     for line in result.stdout.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or line.startswith("gpu"):
+        line_stripped = line.strip()
+        if not line_stripped:
             continue
-        parts = line.split()
-        if len(parts) < 5:
-            continue
-        try:
+        # Split: skip the leading "#" column in header, then map remaining columns
+        parts = line_stripped.split()
+        # Header line: starts with "#", e.g. "# gpu  rxpci  txpci      pcitx      pcirx "
+        if line_stripped.startswith("#") and not line_stripped.startswith("# Idx"):
+            # Remove leading "#" token, then parse remaining as metric names
+            data_cols = parts[1:]   # skip the "#" column
+            for idx, col in enumerate(data_cols):
+                # Strip trailing units: "MB/s", "GPM:MiB/s", etc.
+                clean = col.removesuffix("/s").removesuffix(":MiB").removesuffix(":MB")
+                col_map[clean.lower()] = idx
+        elif parts and parts[0].isdigit():
+            # Data line: first token is gpu_id, rest are metric values
             gpu_id = int(parts[0])
-            rxpci  = float(parts[1])
-            txpci  = float(parts[2])
-            nvlrx  = None if parts[3] == "-" else float(parts[3])
-            nvltx  = None if parts[4] == "-" else float(parts[4])
+            data_cols = parts[1:]
+            def val(key):
+                idx = col_map.get(key)
+                if idx is None or idx >= len(data_cols) or data_cols[idx] == "-":
+                    return None
+                try:
+                    return float(data_cols[idx])
+                except ValueError:
+                    return None
+            rxpci = val("rxpci")
+            txpci = val("txpci")
+            nvlrx = val("nvlrx")
+            nvltx = val("nvltx")
             gpus_io[gpu_id] = {"id": gpu_id, "rxpci_mbs": rxpci, "txpci_mbs": txpci,
                                  "nvlrx_mbs": nvlrx, "nvltx_mbs": nvltx}
-        except (ValueError, IndexError):
-            continue
     return [gpus_io.get(i, {}) for i in range(GPU_COUNT)]
 
 
