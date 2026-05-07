@@ -172,7 +172,7 @@ def get_gpu_io():
     try:
         result = subprocess.run(
             ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "4", "-o", "T"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=10
         )
         if result.returncode != 0:
             return None
