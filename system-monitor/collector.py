@@ -353,6 +353,7 @@ def collect():
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": HOSTNAME,
         "gpu_count": GPU_COUNT,
+        "gpu_type": GPU_TYPE,
         "cpu_percent": cpu_percent,
         "memory_percent": mem.percent,
         "memory_used_mb": mem.used / (1024 ** 2),
