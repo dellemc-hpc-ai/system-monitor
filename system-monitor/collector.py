@@ -87,26 +87,32 @@ def get_system_power():
         pass
 
     # ── Method 3: RAPL via sudo (only if sudo works without password) ─────────
-    # /sys/class/powercap/intel-rapl:0/energy_uj requires root.
-    # We only proceed if `sudo -n true` succeeds silently (no password prompt).
+    # /sys/class/powercap/intel-rapl:0/energy_uj is cumulative energy in microjoules.
+    # We maintain _rapl_prev to compute watts = delta_energy / delta_seconds.
+    # Thread-safe via _NET_LOCK (already defined for network stats).
     try:
         check = subprocess.run(
             ["sudo", "-n", "true"],
             capture_output=True, timeout=2
         )
         if check.returncode == 0:
-            # Read package-0 (CPU+DRAM package power)
             energy_path = "/sys/class/powercap/intel-rapl:0/energy_uj"
             result = subprocess.run(
                 ["sudo", "cat", energy_path],
                 capture_output=True, text=True, check=True, timeout=5
             )
-            joules = float(result.stdout.strip())
-            # Convert microjoules → watts using a 1-second window assumption.
-            # For accurate per-sample power, this needs the time delta between
-            # samples (handled outside this function via the collector's own dt).
-            watts = joules / 1_000_000  # W for 1-second interval
-            return watts
+            joules = float(result.stdout.strip()) / 1_000_000  # μJ → J
+            now = time.monotonic()
+            prev = _RAPL_PREV
+            if prev is not None:
+                prev_joules, prev_ts = prev
+                dt = now - prev_ts
+                if dt > 0:
+                    watts = (joules - prev_joules) / dt
+                    if watts >= 0:
+                        _RAPL_PREV = (joules, now)
+                        return round(watts, 1)
+            _RAPL_PREV = (joules, now)
     except Exception:
         pass
 
@@ -142,6 +148,7 @@ def get_gpu_power():
 # ─── Network throughput (rx/tx bytes delta, no sudo) ───────────────────────────
 
 _NET_PREV = {}   # iface -> (rx_bytes, tx_bytes, timestamp)
+_RAPL_PREV = None   # (joules, timestamp)
 _NET_LOCK = threading.Lock()
 
 
