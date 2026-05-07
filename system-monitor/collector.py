@@ -45,18 +45,13 @@ def _probe_gpu():
 _probe_gpu()
 
 
-# ─── System power (BMC / IPMI / RAPL, no sudo unless RAPL sudo available) ──────
+# ─── System power (BMC / IPMI, whole-machine AC input) ────────────────────────
 
 def get_system_power():
     """
-    Returns system-level power consumption in watts (float), or None if unavailable.
-
-    Tries three methods in order:
-    1. ipmitool  (BMC-based, no sudo needed)
-    2. /dev/ipmi0 read  (IPMI device driver, no sudo)
-    3. RAPL sysfs energy_uj via sudo  (CPU+DRAM package, only if sudo works)
-
-    On a machine without BMC/IPMI this always returns None; no error is printed.
+    Returns whole-machine AC input power in watts (float), or None if unavailable.
+    Uses: ipmitool dcmi power reading | grep Instantaneous
+    Falls back to /dev/ipmi0 presence check (placeholder for future use).
     """
     # ── Method 1: ipmitool DCMI (BMC-based, no sudo needed) ─────────────────
     try:
@@ -76,29 +71,38 @@ def get_system_power():
     # ── Method 2: /dev/ipmi0 via OpenIPMI driver (no sudo needed) ────────────
     # /dev/ipmi0 is a character device; simple read() returns nothing.
     # Real IPMI communication requires ioctl calls — not implemented here.
-    # Machines with BMC/IPMI hardware typically have ipmitool available (Method 1).
     try:
         if os.path.exists("/dev/ipmi0"):
             pass
     except Exception:
         pass
 
-    # ── Method 3: RAPL via sudo (only if sudo works without password) ─────────
-    # /sys/class/powercap/intel-rapl:0/energy_uj is cumulative energy in microjoules.
-    # We maintain _rapl_prev to compute watts = delta_energy / delta_seconds.
-    # Thread-safe via _NET_LOCK (already defined for network stats).
+    return None
+
+
+# ─── CPU power (RAPL CPU package power, requires sudo) ───────────────────────
+
+def get_cpu_power():
+    """
+    Returns CPU package power in watts (float) via RAPL energy delta,
+    or None if sudo is not available without password.
+    Reads /sys/class/powercap/intel-rapl:0/energy_uj (cumulative μJ since boot)
+    and maintains _RAPL_PREV to compute watts = delta_J / delta_s.
+    """
     global _RAPL_PREV
     try:
         check = subprocess.run(
             ["sudo", "-n", "true"],
             capture_output=True, timeout=2
         )
-        if check.returncode == 0:
-            energy_path = "/sys/class/powercap/intel-rapl:0/energy_uj"
-            result = subprocess.run(
-                ["sudo", "cat", energy_path],
-                capture_output=True, text=True, check=True, timeout=5
-            )
+        if check.returncode != 0:
+            return None
+        energy_path = "/sys/class/powercap/intel-rapl:0/energy_uj"
+        result = subprocess.run(
+            ["sudo", "cat", energy_path],
+            capture_output=True, text=True, timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip().isdigit():
             joules = float(result.stdout.strip()) / 1_000_000  # μJ → J
             now = time.monotonic()
             prev = _RAPL_PREV
@@ -113,7 +117,6 @@ def get_system_power():
             _RAPL_PREV = (joules, now)
     except Exception:
         pass
-
     return None
 
 
@@ -291,7 +294,8 @@ def collect():
     mem = psutil.virtual_memory()
     net = _get_net_throughput_mbs()
     gpu_power = get_gpu_power()
-    sys_power = get_system_power()   # may be None on machines without BMC
+    sys_power = get_system_power()   # BMC / IPMI, may be None
+    cpu_power = get_cpu_power()      # RAPL, may be None
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": HOSTNAME,
@@ -301,7 +305,8 @@ def collect():
         "memory_used_mb": mem.used / (1024 ** 2),
         "memory_total_mb": mem.total / (1024 ** 2),
         "network": net,
-        "system_power_w": sys_power,
+        "system_power_w": sys_power,  # BMC whole-machine AC power
+        "cpu_power_w": cpu_power,      # RAPL CPU package power
         "gpu_power": gpu_power,
         "gpu": get_gpu_stats()
     }
@@ -327,7 +332,9 @@ def daemon(interval=10):
             append_to_file(stats, "metrics")
             pwr_str = ""
             if stats.get("system_power_w") is not None:
-                pwr_str = f" SYS={stats['system_power_w']:.0f}W"
+                pwr_str += f" SYS={stats['system_power_w']:.0f}W"
+            if stats.get("cpu_power_w") is not None:
+                pwr_str += f" CPU={stats['cpu_power_w']:.0f}W"
             if stats.get("gpu_power"):
                 pwr_str += " " + "/".join(
                     f"GPU{g['id']}={g.get('power_w', '?')}W" for g in stats["gpu_power"]
