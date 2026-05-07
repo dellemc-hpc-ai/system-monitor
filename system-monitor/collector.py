@@ -151,15 +151,23 @@ _GPU_IO_PREV = {}   # gpu_id -> {rxpci, txpci, nvlrx, nvltx}
 
 def get_gpu_io():
     """
-    Returns list of dicts with PCIe/NVLink throughput in MB/s per GPU,
+    Returns list of dicts with PCIe and NVLink throughput in MB/s per GPU,
     or None if nvidia-smi dmon is unavailable.
-    Uses: nvidia-smi dmon -s t --gpm-metrics 60,61 -c 1
+
+    Command: nvidia-smi dmon -s t --gpm-metrics 60,61 -c 1 -o T
+      - -s t        → PCIe RX/TX: columns "rxpci" (MB/s), "txpci" (MB/s)
+      - --gpm-metrics 60,61 → NVLink RX/TX: columns "pcirx" (GPM:MiB/s), "pcitx" (GPM:MiB/s)
+      - -o T        → include timestamp column
+
+    Output columns (may appear in any order):
+      # gpu  rxpci  txpci      pcitx      pcirx
+      # Idx   MB/s   MB/s  GPM:MiB/s  GPM:MiB/s
     """
     if not GPU_AVAILABLE or GPU_COUNT == 0:
         return None
     try:
         result = subprocess.run(
-            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "1"],
+            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "1", "-o", "T"],
             capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
@@ -167,41 +175,71 @@ def get_gpu_io():
     except Exception:
         return None
 
-    gpus_io = {}   # gpu_id -> dict
-    col_map = {}   # metric_name -> col_index (0-based, data part only)
-    for line in result.stdout.splitlines():
-        line_stripped = line.strip()
-        if not line_stripped:
+    col_map = {}   # metric name (lowercase) -> column index in data part
+    gpus_io = {}  # gpu_id -> {rxpci_mbs, txpci_mbs, nvlrx_mbs, nvltx_mbs}
+
+    for line in result.stdout.strip().splitlines():
+        parts = line.strip().split()
+        if not parts:
             continue
-        # Split: skip the leading "#" column in header, then map remaining columns
-        parts = line_stripped.split()
-        # Header line: starts with "#", e.g. "# gpu  rxpci  txpci      pcitx      pcirx "
-        if line_stripped.startswith("#") and not line_stripped.startswith("# Idx"):
-            # Remove leading "#" token, then parse remaining as metric names
-            data_cols = parts[1:]   # skip the "#" column
-            for idx, col in enumerate(data_cols):
-                # Strip trailing units: "MB/s", "GPM:MiB/s", etc.
-                clean = col.removesuffix("/s").removesuffix(":MiB").removesuffix(":MB")
-                col_map[clean.lower()] = idx
-        elif parts and parts[0].isdigit():
-            # Data line: first token is gpu_id, rest are metric values
+
+        # Header detection: look for the line that has metric names like
+        # rxpci/txpci/nvlrx/nvltx (or pcirx/pcitx).  This is the line that
+        # starts with "# gpu" (metric names, no timestamp) or "#Time" (with
+        # timestamp).  We identify it by the presence of a known metric name.
+        if parts[0].startswith("#"):
+            metric_names = {"rxpci", "txpci", "nvlrx", "nvltx", "pcirx", "pcitx"}
+            header_cols = [c.lower() for c in parts]
+            if metric_names & set(header_cols):
+                # This is the header row — find metric column positions.
+                # Header cols include "#Time" (or just "#") at index 0, then "gpu",
+                # then metrics.  We subtract 1 from full-line indices so that
+                # data_cols = parts[1:] (skipping only the gpu-id column) works.
+                for idx, col in enumerate(header_cols):
+                    if col in metric_names:
+                        col_map[col] = idx - 1
+            continue
+
+        if not parts[0].isdigit():
+            # With -o T, data lines start with timestamp (e.g. "11:20:37"), GPU ID is parts[1]
+            if len(parts) > 1 and parts[1].isdigit():
+                gpu_id = int(parts[1])
+                data_cols = parts[1:]   # skip timestamp; gpu is first data element
+            else:
+                continue
+        else:
             gpu_id = int(parts[0])
-            data_cols = parts[1:]
-            def val(key):
-                idx = col_map.get(key)
-                if idx is None or idx >= len(data_cols) or data_cols[idx] == "-":
-                    return None
-                try:
-                    return float(data_cols[idx])
-                except ValueError:
-                    return None
-            rxpci = val("rxpci")
-            txpci = val("txpci")
-            nvlrx = val("nvlrx")
-            nvltx = val("nvltx")
-            gpus_io[gpu_id] = {"id": gpu_id, "rxpci_mbs": rxpci, "txpci_mbs": txpci,
-                                 "nvlrx_mbs": nvlrx, "nvltx_mbs": nvltx}
-    return [gpus_io.get(i, {}) for i in range(GPU_COUNT)]
+            data_cols = parts[1:]       # skip gpu_id; rest are metric values
+
+        def val(key):
+            idx = col_map.get(key)
+            if idx is None or idx >= len(data_cols) or data_cols[idx] == "-":
+                return None
+            try:
+                return float(data_cols[idx])
+            except ValueError:
+                return None
+
+        # rxpci/txpci: PCIe RX/TX in MB/s (from -s t)
+        # nvlrx/nvltx: NVLink RX/TX — nvidia-smi may report these as
+        #   "nvlrx"/"nvltx" (L4 etc.) OR "pcirx"/"pcitx" (H100 etc.)
+        #   Both are in GPM:MiB/s → convert to MB/s (×1.048576)
+        rxpci = val("rxpci")
+        txpci = val("txpci")
+        nvlrx_raw = val("nvlrx") or val("pcirx")
+        nvltx_raw = val("nvltx") or val("pcitx")
+        nvlrx = round(nvlrx_raw * 1.048576, 3) if nvlrx_raw is not None else None
+        nvltx = round(nvltx_raw * 1.048576, 3) if nvltx_raw is not None else None
+
+        gpus_io[gpu_id] = {
+            "id": gpu_id,
+            "rxpci_mbs": rxpci,
+            "txpci_mbs": txpci,
+            "nvlrx_mbs": nvlrx,
+            "nvltx_mbs": nvltx,
+        }
+
+    return [gpus_io.get(i, {"id": i}) for i in range(GPU_COUNT)]
 
 
 # ─── Network throughput (rx/tx bytes delta, no sudo) ───────────────────────────
@@ -274,53 +312,13 @@ def _get_net_throughput_mbs():
     return result
 
 
-# ─── PCIe/NVLink IO (nvidia-smi dmon) ──────────────────────────────────────────
-
-def get_io_stats():
-    """
-    Query PCIe RX/TX and NVLink RX/TX for all GPUs using nvidia-smi dmon.
-    Falls back to None if nvidia-smi dmon is unavailable or returns no data.
-    Returns a dict mapping gpu_id -> {rxpci_mbs, txpci_mbs, nvlrx_mbs, nvltx_mbs}
-    ('-' entries become None to indicate N/A).
-    """
-    if not GPU_AVAILABLE or GPU_COUNT == 0:
-        return None
-    try:
-        result = subprocess.run(
-            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61",
-             "-c", "1", "-o", "T"],
-            capture_output=True, text=True, check=True, timeout=5
-        )
-        lines = result.stdout.strip().split("\n")
-        io_map = {}
-        for line in lines:
-            if not line or line.startswith("#") or line.startswith("gpu"):
-                continue
-            parts = line.split()
-            if len(parts) < 5:
-                continue
-            try:
-                gpu_id = int(parts[0])
-                rxpci  = None if parts[1] == "-" else float(parts[1])
-                txpci  = None if parts[2] == "-" else float(parts[2])
-                nvlrx  = None if parts[3] == "-" else float(parts[3])
-                nvltx  = None if parts[4] == "-" else float(parts[4])
-                io_map[gpu_id] = {"rxpci_mbs": rxpci, "txpci_mbs": txpci,
-                                   "nvlrx_mbs": nvlrx, "nvltx_mbs": nvltx}
-            except (ValueError, IndexError):
-                continue
-        return io_map if io_map else None
-    except Exception:
-        return None
-
-
-# ─── GPU stats (utilization, memory, PCIe/NVLink) ───────────────────────────────
+# ─── GPU stats (utilization, memory) ─────────────────────────────────────────
 
 def get_gpu_stats():
     """Collect stats for all available GPUs (up to 8). Returns a list."""
     if not GPU_AVAILABLE or GPU_COUNT == 0:
         return None
-    io_stats = get_io_stats()
+    gpu_io = get_gpu_io()   # PCIe/NVLink via nvidia-smi dmon
     gpus = []
     for i in range(GPU_COUNT):
         try:
@@ -337,8 +335,9 @@ def get_gpu_stats():
                 "memory_used_mb": float(mem_used),
                 "memory_total_mb": float(mem_total)
             }
-            if io_stats and i in io_stats:
-                gpu_entry.update(io_stats[i])
+            if gpu_io:
+                io_entry = next((g for g in gpu_io if g.get("id") == i), {})
+                gpu_entry.update(io_entry)
             gpus.append(gpu_entry)
         except Exception as e:
             gpus.append({"id": i, "error": str(e)})
@@ -351,17 +350,10 @@ def collect():
     cpu_percent = psutil.cpu_percent(interval=0.5)
     mem = psutil.virtual_memory()
     net = _get_net_throughput_mbs()
+    sys_power = get_system_power()  # BMC whole-machine AC power
+    cpu_power = get_cpu_power()     # RAPL CPU package power
     gpu_power = get_gpu_power()
-    gpu_io    = get_gpu_io()       # PCIe/NVLink, may be None
-    sys_power = get_system_power()  # BMC / IPMI, may be None
-    cpu_power = get_cpu_power()     # RAPL, may be None
-
-    # Merge GPU stats with power and IO data per GPU id
-    gpu_stats = get_gpu_stats()
-    if gpu_io:
-        io_by_id = {g["id"]: g for g in gpu_io}
-        for g in gpu_stats:
-            g.update(io_by_id.get(g["id"], {}))
+    gpu_stats = get_gpu_stats()     # includes PCIe/NVLink via get_gpu_io() internally
 
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
