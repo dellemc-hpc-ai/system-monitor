@@ -119,8 +119,8 @@ while [[ ${#remaining[@]} -gt 0 ]]; do
         echo "  [DRY RUN] waited for ${#sources[@]} parallel rsyncs"
     else
         echo "  waiting for ${#pids[@]} jobs..."
-        for pid in "${pids[@]}"; do
-            wait $pid || true
+        for pid in "${pids[@]:-}"; do
+            wait $pid 2>/dev/null || true
         done
     fi
 
@@ -147,7 +147,7 @@ while [[ ${#remaining[@]} -gt 0 ]]; do
     echo "  → ${#new_sources[@]} new sources ready (total sources: ${#sources[@]})"
     echo ""
 
-    ((round++))
+    ((round++)) || true
 done
 
 echo "=============================================="
