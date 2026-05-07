@@ -62,7 +62,7 @@ expand_nodes() {
                 [[ ${#start} -gt ${#end} ]] && pad=${#start} || pad=${#end}
             fi
 
-            for ((i=start;i<=end;i++)); do
+            for ((i=10#$start;i<=10#$end;i++)); do
                 [[ -n "$result" ]] && result="$result,"
                 result="$result$(printf "${prefix}%0*d" "$pad" "$i")"
             done
@@ -138,6 +138,8 @@ IDXFILE="/tmp/rsync-tree-waiting.idx"
 # ---- Helpers ----
 
 pick_waiting() {
+    # Returns: <idx>\n<node_name>
+    # Caller is responsible for splicing waiting[idx] after this returns.
     local lock="/tmp/rsync-tree-wait.lock"
     while ! mkdir "$lock" 2>/dev/null; do sleep 0.05; done
 
@@ -146,22 +148,16 @@ pick_waiting() {
 
     if (( idx >= ${#waiting[@]} )); then
         rmdir "$lock"
-        # Signal: no more nodes
         echo ""
         return
     fi
 
     local node="${waiting[$idx]}"
-
-    # Advance index
     echo $((idx + 1)) > "$IDXFILE"
-
-    # Write new waiting array (without picked node) to temp file
-    # so the caller can update the global variable
-    printf '%s\n' "${waiting[@]:0:$idx}" "${waiting[@]:$((idx + 1))}" > "/tmp/rsync-tree-waiting-new.tmp"
-
     rmdir "$lock"
-    printf '%s' "$node"
+
+    # Return both idx and node name
+    printf '%s\n%s' "$idx" "$node"
 }
 
 do_rsync() {
@@ -171,7 +167,14 @@ do_rsync() {
     if [[ -n "$DRY_RUN" ]]; then
         echo "  [$src] → [$tgt]  [DRY]"
         echo "[$src] → [$tgt] ✓" >> "$LOGFILE"
-        ready["$tgt"]=1
+        # Simulate rsync completion: short background sleep, then mark done.
+        # collect_ready will catch it when it exits and move node to ready.
+        # This preserves the active→ready state machine for correct topology.
+        (
+            sleep 0.01
+            mkdir "/tmp/rsync-tree-done-$tgt"
+        ) &
+        active["$tgt"]=$!
         return 0
     fi
 
@@ -245,16 +248,20 @@ while true; do
         done
         [[ $is_sending -eq 1 ]] && continue
 
-        # Pick a waiting node — read current index, advance atomically
-        picked_idx=$(cat "$IDXFILE" 2>/dev/null) && picked_idx=${picked_idx:-0} || picked_idx=0
-        if (( picked_idx >= ${#waiting[@]} )); then
+        # Pick a waiting node — returns "idx\nnode", caller splices waiting array
+        pick_result=$(pick_waiting)
+        if [[ -z "$pick_result" ]]; then
             break
         fi
-        tgt="${waiting[$picked_idx]}"
-        echo $((picked_idx + 1)) > "$IDXFILE"
+        # Extract index and node name from pick_result
+        pick_idx=$(echo "$pick_result" | head -1)
+        tgt=$(echo "$pick_result" | tail -1)
+        if [[ -z "$tgt" ]]; then
+            break
+        fi
 
-        # Splice picked node out of waiting array (inline, so global is updated)
-        waiting=("${waiting[@]:0:$picked_idx}" "${waiting[@]:$((picked_idx + 1))}")
+        # Splice picked node out of waiting array (this is the global variable)
+        waiting=("${waiting[@]:0:$pick_idx}" "${waiting[@]:$((pick_idx + 1))}")
 
         # Remove source from ready (it's now busy)
         unset "ready[$src]"
