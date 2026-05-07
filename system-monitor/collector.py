@@ -90,6 +90,7 @@ def get_system_power():
     # /sys/class/powercap/intel-rapl:0/energy_uj is cumulative energy in microjoules.
     # We maintain _rapl_prev to compute watts = delta_energy / delta_seconds.
     # Thread-safe via _NET_LOCK (already defined for network stats).
+    global _RAPL_PREV
     try:
         check = subprocess.run(
             ["sudo", "-n", "true"],
