@@ -1,164 +1,209 @@
 #!/bin/bash
 #=============================================================================
-# rsync-tree.sh — Binary tree rsync distribution for /mnt/data node001-018
+# rsync-tree.sh — Event-driven parallel rsync tree for /mnt/data node001-018
 #
-# Problem: ~500 GB on node012 (and a few others) → 18 nodes, 100MB/s per eth.
-# 
-# Binary tree strategy (Frank's algorithm):
-#   node012 forks → node011 + node002          (both at full 100MB/s from source)
-#   then node011 + node002 each fork            (4 sources, 4 targets)
-#   then 4 fork → 4 more                       (8 sources, 8 targets remaining)
-#   etc.
+# Each node: waiting → active → ready (as new source)
+# Main loop: drain completed jobs → pair free ready sources with waiting nodes
+# Result: #parallel_rsyncs grows as nodes finish; each at full 100MB/s
 #
-# Each node's eth is always saturated at 100MB/s (no splitting).
-# Total time: log2(17) × (500GB/100MB/s) ≈ 4 × 41.7min ≈ 167min
-# vs. naive 8-way flood: 83min alone before wave 2 even starts.
-#
-# Usage: ./rsync-tree.sh [--dry-run] [--source <node>]
+# Usage: ./rsync-tree.sh [--dry-run] [--source node12]
 #=============================================================================
 
-set -euo pipefail
+set -uo pipefail   # note: NOT -e, we handle errors explicitly
 
-DRY_RUN=""
-SOURCE_NODE="node012"
+SOURCE_NODE="node12"
 SRC_DIR="/mnt/data"
 SSH_ARGS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+DRY_RUN=""
 
-# All 18 nodes sorted for tree balance: source in middle, spread outward
-# node012 (index 11) is the source; spread ±8 to cover 001-018
-ALL_NODES=(node001 node002 node003 node004 node005 node006 node007 node008 \
-           node009 node010 node011 node012 node013 node014 node015 node016 \
-           node017 node018)
-
-# Parse args
 while [[ $# -gt 0 ]]; do
     case $1 in
-        --dry-run) DRY_RUN="--dry-run"; shift ;;
+        --dry-run) DRY_RUN=1; shift ;;
         --source)  SOURCE_NODE="$2"; shift 2 ;;
-        *) echo "Usage: $0 [--dry-run] [--source node012]"; exit 1 ;;
+        *) echo "Usage: $0 [--dry-run] [--source node12]"; exit 1 ;;
     esac
 done
 
 echo "=============================================="
-echo " rsync-tree.sh — Binary tree distribution"
+echo " rsync-tree.sh — Event-driven rsync tree"
 echo "=============================================="
 echo "  Source : $SOURCE_NODE"
-echo "  Targets: ${#ALL_NODES[@]} nodes"
-echo "  Src dir: $SRC_DIR"
+echo "  Targets: 18 nodes"
 echo "  Dry run: ${DRY_RUN:-no}"
 echo ""
 
-# Find index of source node in ALL_NODES
-src_idx=-1
-for i in "${!ALL_NODES[@]}"; do
-    [[ "${ALL_NODES[$i]}" == "$SOURCE_NODE" ]] && src_idx=$i && break
-done
-if [[ $src_idx -lt 0 ]]; then
-    echo "ERROR: source $SOURCE_NODE not found in node list"
-    exit 1
-fi
-echo "Source $SOURCE_NODE is at index $src_idx in the sorted list"
-echo ""
+# ---- State ----
+# waiting[@]: nodes still needing data
+# active[@]:  nodes receiving (value = "src_pid")
+# ready[@]:   nodes free to send
 
-# Build binary tree layers
-# Layer 0: [source_idx]
-# Layer 1: source splits to left_child_idx, right_child_idx
-# etc.
+declare -a waiting=()
+declare -A active=()   # target_node → pid
+declare -A ready=()     # source_node → 1
 
-declare -a layers=()
-declare -A node_parent    # child → parent (for routing info)
-declare -A is_source      # node → 1 if it has the data
+# Build node list: node01..node18 (seq -w gives 2-digit padding 01..18)
+ALL_NODES=()
+for i in $(seq -w 1 18); do ALL_NODES+=("node${i}"); done
 
-# Mark source as having data
-is_source["$SOURCE_NODE"]=1
-sources=("$SOURCE_NODE")
-
-# Remaining nodes to distribute to (all except source)
-declare -a remaining=()
 for n in "${ALL_NODES[@]}"; do
-    [[ "$n" != "$SOURCE_NODE" ]] && remaining+=("$n")
-done
-
-# Build binary tree by pairing sources with closest unassigned nodes
-# Each iteration: each source picks its nearest remaining node and rsyncs to it
-# Then both become sources for the next round
-
-round=0
-while [[ ${#remaining[@]} -gt 0 ]]; do
-    echo "=== Round $round: ${#sources[@]} sources, ${#remaining[@]} remaining ==="
-
-    declare -a new_sources=()
-    declare -a pids=()
-
-    # Pair each source with one remaining node (round-robin by proximity)
-    # Simple nearest-first: source i pairs with remaining[i]
-    for i in "${!sources[@]}"; do
-        src="${sources[$i]}"
-        rem_idx=$i
-
-        # Skip if no more remaining
-        (( rem_idx >= ${#remaining[@]} )) && continue
-
-        tgt="${remaining[$rem_idx]}"
-
-        echo "  [$src] → [$tgt]  (round $round)"
-
-        if [[ -z "$DRY_RUN" ]]; then
-            rsync -av \
-                -e "ssh $SSH_ARGS" \
-                --rsync-path="sudo rsync" \
-                "$SRC_DIR/" \
-                "${tgt}:$SRC_DIR/" \
-                &> "/tmp/rsync-$src-$tgt-$round.log" &
-            pids+=($!)
-        fi
-    done
-
-    # Wait for this round's rsyncs to finish
-    if [[ -n "$DRY_RUN" ]]; then
-        echo "  [DRY RUN] waited for ${#sources[@]} parallel rsyncs"
+    if [[ "$n" == "$SOURCE_NODE" ]]; then
+        ready["$n"]=1
     else
-        echo "  waiting for ${#pids[@]} jobs..."
-        for pid in "${pids[@]:-}"; do
-            wait $pid 2>/dev/null || true
-        done
+        waiting+=("$n")
     fi
-
-    # Advance: paired remaining nodes become new sources
-    paired_count=$(( ${#sources[@]} < ${#remaining[@]} ? ${#sources[@]} : ${#remaining[@]} ))
-    for i in $(seq 0 $((paired_count - 1))); do
-        tgt="${remaining[$i]}"
-        is_source["$tgt"]=1
-        new_sources+=("$tgt")
-    done
-
-    # Remove paired nodes from remaining
-    declare -a new_remaining=()
-    for i in "${!remaining[@]}"; do
-        if [[ $i -ge $paired_count ]]; then
-            new_remaining+=("${remaining[$i]}")
-        fi
-    done
-    remaining=("${new_remaining[@]}")
-
-    # Add new sources to pool
-    sources+=("${new_sources[@]}")
-
-    echo "  → ${#new_sources[@]} new sources ready (total sources: ${#sources[@]})"
-    echo ""
-
-    ((round++)) || true
 done
 
-echo "=============================================="
-echo " All ${#ALL_NODES[@]} nodes synced!"
-echo " Rounds: $round"
-echo "=============================================="
+echo "Initial: 1 source, ${#waiting[@]} need data"
 echo ""
 
-# Quick verify
-echo "Verification:"
-for n in node001 node005 node012 node018; do
-    count=$(ssh $SSH_ARGS "$n" "ls $SRC_DIR 2>/dev/null | wc -l" 2>/dev/null || echo "0")
+LOGFILE="/tmp/rsync-tree.log"
+> "$LOGFILE"
+
+# Atomic counter for picking from waiting array
+IDXFILE="/tmp/rsync-tree-waiting.idx"
+> "$IDXFILE"
+
+# ---- Helpers ----
+
+# Claim the next waiting node. Returns "" when empty.
+pick_waiting() {
+    local lock="/tmp/rsync-tree-wait.lock"
+    
+    # mkdir is atomic lock
+    while ! mkdir "$lock" 2>/dev/null; do sleep 0.05; done
+    
+    local idx=0
+    idx=$(cat "$IDXFILE" 2>/dev/null) && idx=${idx:-0} || idx=0
+    
+    local node=""
+    if (( idx < ${#waiting[@]} )); then
+        node="${waiting[$idx]}"
+        echo $((idx + 1)) > "$IDXFILE"
+    fi
+    
+    rmdir "$lock"
+    printf '%s' "$node"
+}
+
+# Start rsync src → tgt. Returns pid.
+do_rsync() {
+    local src=$1 tgt=$2
+    local log="/tmp/rsync-$src-$tgt.log"
+    
+    if [[ -n "$DRY_RUN" ]]; then
+        echo "  [$src] → [$tgt]  [DRY]"
+        echo "[$src] → [$tgt] ✓" >> "$LOGFILE"
+        # Don't add to active in dry-run — jobs complete instantly
+        ready["$tgt"]=1
+        echo "  → newly ready: $tgt  ($((${#ready[@]})) sources total)"
+        return 0
+    fi
+    
+    rsync -av \
+        -e "ssh $SSH_ARGS" \
+        --rsync-path="sudo rsync" \
+        "$SRC_DIR/" \
+        "${tgt}:$SRC_DIR/" \
+        &> "$log" &
+    
+    echo $!
+}
+
+# Collect finished jobs: active→ready
+collect_ready() {
+    local new_nodes=""
+    
+    for tgt in "${!active[@]}"; do
+        local pid="${active[$tgt]}"
+        if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid" 2>/dev/null
+            unset "active[$tgt]"
+            ready["$tgt"]=1
+            new_nodes="$new_nodes $tgt"
+        fi
+    done
+    
+    if [[ -n "$new_nodes" ]]; then
+        local n_ready=0
+        for r in "${!ready[@]}"; do ((n_ready++)); done 2>/dev/null
+        echo "  → newly ready:$new_nodes  ($n_ready sources total)"
+    fi
+}
+
+# ---- Main loop ----
+
+iter=0
+while true; do
+    iter=$((iter + 1))
+    
+    # Collect any jobs that finished since last iteration
+    collect_ready
+    
+    n_active=${#active[@]}
+    n_ready=${#ready[@]}
+    n_waiting=${#waiting[@]}
+    
+    # All done?
+    if (( n_waiting == 0 && n_active == 0 )); then
+        break
+    fi
+    
+    # Nothing we can do right now?
+    if (( n_ready == 0 )); then
+        echo "--- iter $iter: $n_active active, $n_waiting waiting, no free sources — waiting..."
+        sleep 1
+        continue
+    fi
+    
+    if (( n_waiting == 0 )); then
+        echo "--- iter $iter: $n_active active, all assigned — waiting for actives to finish..."
+        sleep 1
+        continue
+    fi
+    
+    echo "--- iter $iter: $n_active active, $n_waiting waiting, $n_ready free sources ---"
+    
+    # Assign: each free ready source → one waiting node
+    started=0
+    for src in "${!ready[@]}"; do
+        # Skip if already sending
+        is_sending=0
+        for atgt in "${!active[@]}"; do
+            if [[ "${active[$atgt]}" == "$src" ]]; then
+                is_sending=1; break
+            fi
+        done
+        [[ $is_sending -eq 1 ]] && continue
+        
+        # Claim a waiting node
+        tgt=$(pick_waiting)
+        if [[ -z "$tgt" ]]; then
+            break   # no more waiting nodes to claim
+        fi
+        
+        # Mark source as busy (remove from ready)
+        unset "ready[$src]"
+        
+        # Launch rsync
+        pid=$(do_rsync "$src" "$tgt")
+        active["$tgt"]=$pid
+        echo "  [$src] → [$tgt]  pid=$pid"
+        started=$((started + 1))
+    done
+    
+    if (( started == 0 )); then
+        # Nothing started (all sources busy or no waiting), wait a bit
+        sleep 1
+    fi
+done
+
+echo ""
+echo "=============================================="
+echo " All 18 nodes synced in $iter iterations!"
+echo "=============================================="
+echo ""
+echo "Verification (sample):"
+for n in node01 node05 node12 node18; do
+    count=$(ssh $SSH_ARGS "$n" "ls $SRC_DIR 2>/dev/null | wc -l" 2>/dev/null || echo "?")
     printf "  %-8s : %s files\n" "$n" "$count"
 done
