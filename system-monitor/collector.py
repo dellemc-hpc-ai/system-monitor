@@ -58,19 +58,18 @@ def get_system_power():
 
     On a machine without BMC/IPMI this always returns None; no error is printed.
     """
-    # ── Method 1: ipmitool ───────────────────────────────────────────────────
+    # ── Method 1: ipmitool DCMI (BMC-based, no sudo needed) ─────────────────
     try:
         result = subprocess.run(
-            ["ipmitool", "raw", "0x3c", "0x01"],
-            capture_output=True, text=True, check=True, timeout=5
+            ["ipmitool", "dcmi", "power", "reading"],
+            capture_output=True, text=True, timeout=5
         )
-        # Sample response: "3c 01 00 6b" → bytes [2,3] = 0x006b = 107 W
-        raw = result.stdout.strip()
-        parts = raw.split()
-        if len(parts) >= 4:
-            # Sensor type 0x3C (System Board) command 0x01 reads AC power in watts
-            watts = int(parts[2], 16) << 8 | int(parts[3], 16)
-            return float(watts)
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                if "Instantaneous" in line:
+                    # e.g. "  Instantaneous power reading:    2000 W"
+                    val = line.split(":")[-1].strip().split()[0]
+                    return float(val)
     except Exception:
         pass
 
@@ -80,8 +79,6 @@ def get_system_power():
     # Machines with BMC/IPMI hardware typically have ipmitool available (Method 1).
     try:
         if os.path.exists("/dev/ipmi0"):
-            # Quick existence check — if the device node exists but ipmitool
-            # doesn't work, there's no sensible fallback without ioctl complexity.
             pass
     except Exception:
         pass
