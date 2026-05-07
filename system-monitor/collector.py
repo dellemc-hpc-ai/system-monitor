@@ -150,29 +150,21 @@ def get_gpu_power():
 _GPU_IO_PREV = {}   # gpu_id -> {rxpci, txpci, nvlrx, nvltx}
 
 
-def get_gpu_io():
+def get_gpu_io(enabled=True):
     """
     Returns list of dicts with PCIe and NVLink throughput in MB/s per GPU,
-    or None if nvidia-smi dmon is unavailable.
+    or None if nvidia-smi dmon is unavailable / disabled.
 
-    Command: nvidia-smi dmon -s t --gpm-metrics 60,61 -c 4 -o T
-      - -s t              → PCIe RX/TX: columns "rxpci" (MB/s), "txpci" (MB/s)
-      - --gpm-metrics 60,61 → NVLink RX/TX: columns "nvlrx"/"nvltx" (GPM:MiB/s)
-                               Note: NVLink may output null for the first 3 samples
-                               on some GPUs (B300); we collect 4 samples and use the last.
-      - -c 4              → 4 samples; NVLink counters may need 3+ samples on B300
-      - -o T              → include timestamp column
-
-    Output columns:
-      # gpu  rxpci  txpci      nvlrx      nvltx
-      # Idx   MB/s   MB/s  GPM:MiB/s  GPM:MiB/s
+    When enabled=False, returns None immediately (fast path, no subprocess call).
+    NVLink data is only meaningful when the collector interval is >= 10s,
+    as the nvidia-smi dmon needs ~3s to collect valid NVLink samples.
     """
-    if not GPU_AVAILABLE or GPU_COUNT == 0:
+    if not enabled or not GPU_AVAILABLE or GPU_COUNT == 0:
         return None
     try:
         result = subprocess.run(
-            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "4", "-o", "T"],
-            capture_output=True, text=True, timeout=10
+            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "3", "-o", "T"],
+            capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
             return None
@@ -319,11 +311,11 @@ def _get_net_throughput_mbs():
 
 # ─── GPU stats (utilization, memory) ─────────────────────────────────────────
 
-def get_gpu_stats():
+def get_gpu_stats(enable_nvlink=True):
     """Collect stats for all available GPUs (up to 8). Returns a list."""
     if not GPU_AVAILABLE or GPU_COUNT == 0:
         return None
-    gpu_io = get_gpu_io()   # PCIe/NVLink via nvidia-smi dmon
+    gpu_io = get_gpu_io(enabled=enable_nvlink)   # PCIe/NVLink via nvidia-smi dmon
     gpus = []
     for i in range(GPU_COUNT):
         try:
@@ -351,14 +343,14 @@ def get_gpu_stats():
 
 # ─── Main collect ──────────────────────────────────────────────────────────────
 
-def collect():
+def collect(enable_nvlink=True):
     cpu_percent = psutil.cpu_percent(interval=0.5)
     mem = psutil.virtual_memory()
     net = _get_net_throughput_mbs()
     sys_power = get_system_power()  # BMC whole-machine AC power
     cpu_power = get_cpu_power()     # RAPL CPU package power
     gpu_power = get_gpu_power()
-    gpu_stats = get_gpu_stats()     # includes PCIe/NVLink via get_gpu_io() internally
+    gpu_stats = get_gpu_stats(enable_nvlink=enable_nvlink)   # PCIe/NVLink via nvidia-smi dmon
 
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -390,10 +382,11 @@ def append_to_file(data, period):
 
 def daemon(interval=10):
     gpu_label = f"{GPU_COUNT}x GPU" if GPU_COUNT else "no GPU"
-    print(f"Collector starting on [{HOSTNAME}], interval={interval}s, GPU={gpu_label}")
+    enable_nvlink = (interval >= 10)
+    print(f"Collector starting on [{HOSTNAME}], interval={interval}s, NVLink={'enabled' if enable_nvlink else 'disabled'}, GPU={gpu_label}")
     while True:
         try:
-            stats = collect()
+            stats = collect(enable_nvlink=enable_nvlink)
             append_to_file(stats, "metrics")
             pwr_str = ""
             if stats.get("system_power_w") is not None:
