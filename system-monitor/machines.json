@@ -3,5 +3,10 @@
     "hostname": "frank-XPS-8960",
     "gpu_type": "NVIDIA L4",
     "gpu_count": 1
+  },
+  {
+    "hostname": "mlperf1",
+    "gpu_type": "NVIDIA GPU",
+    "gpu_count": 8
   }
 ]
