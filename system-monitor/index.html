@@ -61,6 +61,8 @@
   <button id="btn-hour" class="active" onclick="setRange('hour')">Hour</button>
   <button id="btn-day" onclick="setRange('day')">Day</button>
   <button id="btn-week" onclick="setRange('week')">Week</button>
+  <button id="btn-custom" onclick="setRange('custom')" style="border-color:#555">Custom</button>
+  <input type="date" id="custom-date" style="background:#1e2230;color:#e0e0e0;border:1px solid #333;padding:4px 8px;border-radius:6px;font-size:0.85rem;display:none" onchange="onCustomDateChange()" />
   <button onclick="refresh()" style="margin-left:auto">🔄 Refresh</button>
 </div>
 
@@ -324,8 +326,19 @@ function chartOptions() {
 // ─── Controls ────────────────────────────────────────────────────────────────
 function setRange(r) {
   currentRange = r;
-  ['btn-hour','btn-day','btn-week'].forEach(id => document.getElementById(id).classList.remove('active'));
+  ['btn-hour','btn-day','btn-week','btn-custom'].forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById('btn-' + r).classList.add('active');
+  const dateInput = document.getElementById('custom-date');
+  if (r === 'custom') {
+    dateInput.style.display = 'inline-block';
+    dateInput.focus();
+  } else {
+    dateInput.style.display = 'none';
+  }
+  refresh();
+}
+
+function onCustomDateChange() {
   refresh();
 }
 
@@ -402,7 +415,8 @@ async function refresh() {
   const yd    = new Date(d.getTime() - 86400000);
   const todayUTC     = d.toISOString().slice(0, 10).replace(/-/g, '');
   const yesterdayUTC = yd.toISOString().slice(0, 10).replace(/-/g, '');
-  const files = ['data/metrics_' + hostname + '_' + todayUTC + '.json'];
+
+  let files = ['data/metrics_' + hostname + '_' + todayUTC + '.json'];
   if (currentRange === 'day') {
     files.push('data/metrics_' + hostname + '_' + yesterdayUTC + '.json');
   } else if (currentRange === 'week') {
@@ -411,6 +425,20 @@ async function refresh() {
     weekFiles.forEach(f => {
       if (!files.includes(f)) files.push('data/metrics_' + hostname + '_' + f + '.json');
     });
+  } else if (currentRange === 'custom') {
+    const dateInput = document.getElementById('custom-date');
+    if (dateInput.value) {
+      // Convert local date string (YYYY-MM-DD) to UTC date string (YYYYMMDD)
+      const localDate = new Date(dateInput.value + 'T00:00:00');
+      const utcStr = localDate.toISOString().slice(0, 10).replace(/-/g, '');
+      files = ['data/metrics_' + hostname + '_' + utcStr + '.json'];
+    }
+  }
+
+  // ── Time-filter: for 'custom' range, show all data from the selected day (no cutoff)
+  let timeCutoff = cutoff;
+  if (currentRange === 'custom') {
+    timeCutoff = 0;
   }
 
   // ── Fetch & parse
@@ -426,7 +454,7 @@ async function refresh() {
   }
 
   // ── Time-filter
-  allData = allData.filter(d => new Date(d.timestamp).getTime() > cutoff);
+  allData = allData.filter(d => new Date(d.timestamp).getTime() > timeCutoff);
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   if (allData.length === 0) {
