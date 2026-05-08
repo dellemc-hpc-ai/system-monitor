@@ -151,6 +151,9 @@ def get_gpu_power():
 _GPU_IO_PREV = {}   # gpu_id -> {rxpci, txpci, nvlrx, nvltx}
 
 
+_GPU_IO_DEBUG = os.environ.get("COLLECTOR_DEBUG", "0") == "1"
+
+
 def get_gpu_io(enabled=True):
     """
     Returns list of dicts with PCIe and NVLink throughput in MB/s per GPU,
@@ -185,6 +188,9 @@ def get_gpu_io(enabled=True):
         if not parts:
             continue
 
+        if _GPU_IO_DEBUG:
+            sys.stderr.write(f"[get_gpu_io] DEBUG line: {parts}\n")
+
         # Header detection: look for the line that has metric names like
         # rxpci/txpci/nvlrx/nvltx (or pcirx/pcitx).  This is the line that
         # starts with "# gpu" (metric names, no timestamp) or "#Time" (with
@@ -192,6 +198,8 @@ def get_gpu_io(enabled=True):
         if parts[0].startswith("#"):
             metric_names = {"rxpci", "txpci", "nvlrx", "nvltx", "pcirx", "pcitx"}
             header_cols = [c.lower() for c in parts]
+            if _GPU_IO_DEBUG:
+                sys.stderr.write(f"[get_gpu_io] DEBUG header_cols={header_cols} intersect={metric_names & set(header_cols)}\n")
             if metric_names & set(header_cols):
                 # This is the metric-names header row.
                 # Build col_map relative to data columns (parts[1:]) so offsets
@@ -200,6 +208,8 @@ def get_gpu_io(enabled=True):
                 for idx, col in enumerate(parts[1:]):   # data-col offset from parts[1]
                     if col.lower() in metric_names:
                         col_map[col.lower()] = idx   # idx is already relative to parts[1] (data_cols)
+                if _GPU_IO_DEBUG:
+                    sys.stderr.write(f"[get_gpu_io] DEBUG col_map built: {col_map}\n")
             continue
 
         if not parts[0].isdigit():
@@ -212,6 +222,9 @@ def get_gpu_io(enabled=True):
         else:
             gpu_id = int(parts[0])
             data_cols = parts[1:]       # skip gpu_id; rest are metric values
+
+        if _GPU_IO_DEBUG:
+            sys.stderr.write(f"[get_gpu_io] DEBUG gpu_id={gpu_id} data_cols={data_cols} col_map={col_map}\n")
 
         def val(key):
             idx = col_map.get(key)
