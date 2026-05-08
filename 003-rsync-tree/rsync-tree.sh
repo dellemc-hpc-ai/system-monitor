@@ -169,10 +169,9 @@ do_rsync() {
         return 0
     fi
 
-    rsync -av --inplace \
-        -e "ssh $SSH_ARGS" \
-        "$SRC_DIR/" \
-        "${tgt}:$SRC_DIR/" \
+    # Run rsync ON the source node, pushing to target via ssh
+    ssh $SSH_ARGS "$src" \
+        "rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/" \
         &> "$log" &
 
     local pid=$!
@@ -210,10 +209,8 @@ check_complete() {
                 echo "==============================================" >&2
                 echo "  Source : $src" >&2
                 echo "  Target : $tgt" >&2
-                echo "  Command: rsync -av --inplace \\" >&2
-                echo "             -e \"ssh $SSH_ARGS\" \\" >&2
-                echo "             $SRC_DIR/ \\" >&2
-                echo "             ${tgt}:$SRC_DIR/" >&2
+                echo "  Command: ssh $SSH_ARGS $src \\" >&2
+                echo "             \"rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/\"" >&2
                 echo "  Log    : $log" >&2
                 echo "" >&2
                 echo "--- rsync stdout/stderr ($log) ---" >&2
@@ -261,10 +258,8 @@ check_complete() {
         echo "=============================================="
         echo "  Source : $src"
         echo "  Target : $tgt"
-        echo "  Command: rsync -av --inplace \\"
-        echo "             -e \"ssh $SSH_ARGS\" \\"
-        echo "             $SRC_DIR/ \\"
-        echo "             ${tgt}:$SRC_DIR/"
+        echo "  Command: ssh $SSH_ARGS $src \\"
+        echo "             \"rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/\""
         echo "  Log    : $log"
         echo ""
         echo "--- rsync stdout/stderr ($log) ---"
