@@ -164,10 +164,14 @@ def get_gpu_io(enabled=True):
     try:
         result = subprocess.run(
             ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "3", "-o", "T"],
-            capture_output=True, text=True, timeout=5
+            capture_output=True, text=True, timeout=8
         )
         if result.returncode != 0:
+            sys.stderr.write(f"[get_gpu_io] dmon exit code {result.returncode}\n")
             return None
+    except subprocess.TimeoutExpired:
+        sys.stderr.write(f"[get_gpu_io] dmon timed out after 8s — killing\n")
+        return None
     except Exception as e:
         sys.stderr.write(f"[get_gpu_io] exception: {e}\n")
         return None
@@ -194,7 +198,7 @@ def get_gpu_io(enabled=True):
                 # "#" (no timestamp) or "#Time" (timestamp present).
                 for idx, col in enumerate(parts[1:]):   # data-col offset from parts[1]
                     if col.lower() in metric_names:
-                        col_map[col.lower()] = idx
+                        col_map[col.lower()] = idx   # idx is already relative to parts[1] (data_cols)
             continue
 
         if not parts[0].isdigit():
