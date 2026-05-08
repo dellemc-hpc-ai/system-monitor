@@ -163,8 +163,8 @@ def get_gpu_io(enabled=True):
         return None
     try:
         result = subprocess.run(
-            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "3", "-o", "T"],
-            capture_output=True, text=True, timeout=8
+            ["nvidia-smi", "dmon", "-s", "t", "--gpm-metrics", "60,61", "-c", "4", "-o", "T"],
+            capture_output=True, text=True, timeout=10
         )
         if result.returncode != 0:
             sys.stderr.write(f"[get_gpu_io] dmon exit code {result.returncode}\n")
