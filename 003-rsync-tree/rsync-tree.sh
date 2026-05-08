@@ -9,7 +9,7 @@
 # Usage:
 #   ./rsync-tree.sh --dry-run
 #   ./rsync-tree.sh --nodes 'node[01-18]'            # node001..node018 (default)
-#   ./rsync-tree.sh --nodes 'node0[01-18]'            # node001..node018 (explicit)
+#   ./rsync-tree.sh --nodes 'node0[01-18]'            # node001..node002 (explicit)
 #   ./rsync-tree.sh --nodes 'compute[0-7]'            # compute0..compute7
 #   ./rsync-tree.sh --nodes 'n01,n02,n03,n04'        # explicit comma list
 #   ./rsync-tree.sh --nodes 'n[1..8]'                # n1..n8 (1 to 8)
@@ -104,19 +104,19 @@ echo ""
 source_ok=0
 for n in "${ALL_NODES[@]}"; do
     [[ "$n" == "$SOURCE_NODE" ]] && source_ok=1 && break
-done
+    done
 if [[ $source_ok -eq 0 ]]; then
     echo "ERROR: source $SOURCE_NODE not found in node list"
     exit 1
 fi
 
 # ---- State ----
-# waiting[@]: nodes still needing data
-# active[@]:  nodes currently receiving  (tgt → pid)
-# ready[@]:   nodes that have data and are free to send
+# waiting[@]:  nodes still needing data
+# jobs[@]:     "src→tgt" → pid  (active rsync jobs, one entry per job)
+# ready[@]:    nodes that have data and are free to send
 
 declare -a waiting=()
-declare -A active=()
+declare -A jobs=()    # "src→tgt" => pid
 declare -A ready=()
 
 for n in "${ALL_NODES[@]}"; do
@@ -132,15 +132,12 @@ echo ""
 
 LOGFILE="/tmp/rsync-tree.log"
 > "$LOGFILE"
-IDXFILE="/tmp/rsync-tree-waiting.idx"
-> "$IDXFILE"
 
 # ---- Helpers ----
 
 pick_waiting() {
     # Returns: <idx>\n<node_name> for first unpicked waiting node.
-    # Marks node as picked atomically via file flag so subsequent
-    # calls skip it even if the caller doesn't use it.
+    # Marks node as picked atomically so subsequent calls skip it.
     local lock="/tmp/rsync-tree-wait.lock"
     while ! mkdir "$lock" 2>/dev/null; do sleep 0.05; done
 
@@ -163,15 +160,12 @@ do_rsync() {
     if [[ -n "$DRY_RUN" ]]; then
         echo "  [$src] → [$tgt]  [DRY]"
         echo "[$src] → [$tgt] ✓" >> "$LOGFILE"
-        # Simulate rsync completion with background sleep, collect_ready catches it.
+        # Simulate rsync completion: background sleep then mark done
         (
             sleep 0.01
-            mkdir "/tmp/rsync-tree-done-$src"
-            mkdir "/tmp/rsync-tree-done-$tgt"
+            > "/tmp/rsync-tree-done-$src→$tgt"
         ) &
-        # Track both directions in active[]: src→tgt, tgt→src
-        active["$src"]="$tgt"
-        active["$tgt"]="$src"
+        jobs["$src→$tgt"]=$!
         return 0
     fi
 
@@ -183,67 +177,94 @@ do_rsync() {
         &> "$log" &
 
     local pid=$!
-    # active[] tracks node→peer for bidirectional lookup
-    active["$src"]="$tgt"
-    active["$tgt"]="$src"
-    echo "$pid" > "/tmp/rsync-tree-pid-$src"
+    jobs["$src→$tgt"]=$pid
+    echo "$pid" > "/tmp/rsync-tree-pid-$src→$tgt"
+}
+
+# check_complete src tgt — returns 0 and echos size if both sides match, 1 otherwise
+check_complete() {
+    local src=$1 tgt=$2
+    local log="/tmp/rsync-$src-$tgt.log"
+
+    if [[ -n "$DRY_RUN" ]]; then
+        [[ -f "/tmp/rsync-tree-done-$src→$tgt" ]] && echo "0" && return 0
+        return 1
+    fi
+
+    # rsync must have exited cleanly
+    local pidfile="/tmp/rsync-tree-pid-$src→$tgt"
+    if [[ ! -f "$pidfile" ]]; then
+        return 1
+    fi
+    local pid=$(cat "$pidfile")
+    if kill -0 "$pid" 2>/dev/null; then
+        return 1  # still running
+    fi
+
+    # Check rsync exit status
+    if ! wait "$pid"; then
+        echo "  [!!] [$src] → [$tgt] rsync failed, check $log" >&2
+        return 1
+    fi
+
+    # Verify both sides have same byte count (directory already synced, check size)
+    local src_sz tgt_sz
+    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || return 1
+    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || return 1
+
+    if [[ "$src_sz" != "$tgt_sz" ]]; then
+        echo "  [!!] [$src] → [$tgt] size mismatch: src=$src_sz tgt=$tgt_sz" >&2
+        return 1
+    fi
+
+    echo "$src_sz"
+    return 0
 }
 
 collect_ready() {
     local new_nodes=""
-    # Collect completed pairs first (avoid iterating hash while deleting)
-    declare -a completed=()
+    declare -a newly_done=()
 
-    # Check which rsync jobs have finished.
-    if [[ -n "$DRY_RUN" ]]; then
-        # In dry-run: check done markers. Both src and tgt create one.
-        # Build list of {node,peer} pairs whose done dir exists.
-        for node in "${!active[@]}"; do
-            if [[ -d "/tmp/rsync-tree-done-$node" ]]; then
-                peer="${active[$node]}"
-                completed+=("$node" "$peer")
+    # Check each active job
+    for key in "${!jobs[@]}"; do
+        local pid=${jobs[$key]}
+        local src="${key%%→*}"
+        local tgt="${key##*→}"
+
+        if [[ -n "$DRY_RUN" ]]; then
+            # In dry-run, check done marker file
+            if [[ -f "/tmp/rsync-tree-done-$src→$tgt" ]]; then
+                newly_done+=("$src" "$tgt" "$key")
             fi
-        done
-    else
-        # Real mode: check pidfile existence for src nodes only
-        for node in "${!active[@]}"; do
-            local pidfile="/tmp/rsync-tree-pid-$node"
-            if [[ -f "$pidfile" ]]; then
-                local pid=$(cat "$pidfile")
-                if ! kill -0 "$pid" 2>/dev/null; then
-                    wait "$pid" 2>/dev/null
-                    peer="${active[$node]}"
-                    completed+=("$node" "$peer")
-                    rm -f "$pidfile" "/tmp/rsync-tree-pid-$peer"
-                fi
+        else
+            # In real mode, use check_complete which verifies sizes
+            if result=$(check_complete "$src" "$tgt"); then
+                newly_done+=("$src" "$tgt" "$key")
             fi
-        done
-    fi
+        fi
+    done
 
-    # Now remove completed pairs from active[] and add to ready[]
-    # Dedupe and process — note: must read peer BEFORE unsetting active[]
-    declare -A done=()
-    for item in "${completed[@]}"; do
-        [[ -z "$item" ]] && continue
-        [[ -n "${done[$item]:-}" ]] && continue
-        done[$item]=1
+    # Remove completed jobs from jobs[] and add nodes to ready[]
+    declare -A seen=()
+    for ((i=0; i<${#newly_done[@]}; i+=3)); do
+        local src="${newly_done[$i]}"
+        local tgt="${newly_done[$i+1]}"
+        local key="${newly_done[$i+2]}"
 
-        # Read peer BEFORE we modify active[]
-        peer="${active[$item]:-}"
+        [[ -n "${seen[$key]:-}" ]] && continue
+        seen[$key]=1
 
-        # Remove from active[] both directions
-        unset "active[$item]" 2>/dev/null
-        [[ -n "$peer" ]] && unset "active[$peer]" 2>/dev/null
-        # Remove from ready[] (may have been added by previous collect_ready)
-        unset "ready[$item]" 2>/dev/null
-        [[ -n "$peer" ]] && unset "ready[$peer]" 2>/dev/null
-        # Both nodes now have data — add to ready
-        ready["$item"]=1
-        [[ -n "$peer" ]] && ready["$peer"]=1
-        # Clean up done markers
-        rmdir "/tmp/rsync-tree-done-$item" 2>/dev/null
-        [[ -n "$peer" ]] && rmdir "/tmp/rsync-tree-done-$peer" 2>/dev/null
-        new_nodes="$new_nodes $item${peer:+ }$peer"
+        # Remove job
+        unset "jobs[$key]" 2>/dev/null
+        rm -f "/tmp/rsync-tree-pid-$src→$tgt" "/tmp/rsync-tree-done-$src→$tgt"
+
+        # Mark both nodes as ready (source sent, target received)
+        ready["$src"]=1
+        ready["$tgt"]=1
+
+        # Remove from waiting if somehow still there (shouldn't happen)
+        # Both nodes now have data
+        new_nodes="$new_nodes $src $tgt"
     done
 
     if [[ -n "$new_nodes" ]]; then
@@ -251,9 +272,6 @@ collect_ready() {
         for r in "${!ready[@]}"; do ((n_ready++)); done 2>/dev/null
         echo "  → newly ready:$new_nodes  ($n_ready sources total)"
     fi
-
-    # Debug: log ready/active counts to stderr
-    echo "  collect_ready: active=${#active[@]} ready=${#ready[@]} done_dirs=$(ls -d /tmp/rsync-tree-done-* 2>/dev/null | wc -l)" >&2
 }
 
 # ---- Main loop ----
@@ -263,7 +281,7 @@ while true; do
 
     collect_ready
 
-    n_active=${#active[@]}
+    n_active=${#jobs[@]}
     n_ready=${#ready[@]}
     n_waiting=${#waiting[@]}
 
@@ -286,49 +304,41 @@ while true; do
     echo "--- iter $iter: $n_active active, $n_waiting waiting, $n_ready free sources ---"
     started=0
 
-    is_busy=0  # declare explicitly to avoid set -u issues
     for src in "${!ready[@]}"; do
-        # Is this source already sending (either as source or target)?
+        # Is this source already busy (has an active job)?
+        [[ -n "${jobs[$src→*]:-}" ]] && continue  # starts-with check not directly supported, use loop
         is_busy=0
-        if [[ -n "${active[$src]:-}" ]]; then
-            is_busy=1
-        else
-            for atgt in "${!active[@]}"; do
-                [[ "${active[$atgt]}" == "$src" ]] && is_busy=1 && break
-            done
-        fi
+        for key in "${!jobs[@]}"; do
+            [[ "${key%%→*}" == "$src" ]] && is_busy=1 && break
+        done
         [[ $is_busy -eq 1 ]] && continue
 
-        # Pick a waiting node — returns "idx\nnode", caller splices waiting array
+        # Pick a waiting node
         pick_result=$(pick_waiting)
         if [[ -z "$pick_result" ]]; then
             break
         fi
-        # Extract index and node name from pick_result
         pick_idx=$(echo "$pick_result" | head -1)
         tgt=$(echo "$pick_result" | tail -1)
-        if [[ -z "$tgt" ]]; then
-            break
-        fi
+        [[ -z "$tgt" ]] && break
 
-        # Splice picked node out of waiting array (this is the global variable)
+        # Splice picked node out of waiting array
         waiting=("${waiting[@]:0:$pick_idx}" "${waiting[@]:$((pick_idx + 1))}")
 
-        # Remove source from ready (it's now busy — tracked in active[$src])
+        # Remove source from ready (it's now busy)
         unset "ready[$src]"
 
-        # Start rsync (do_rsync sets active[] bidirectionally)
+        # Start rsync
         do_rsync "$src" "$tgt"
         rs=$?
         echo "  [$src] → [$tgt]  started"
         if [[ $rs -ne 0 ]]; then
-            # Revert: put target back in waiting, source back in ready
+            # Revert
             waiting=("$tgt" "${waiting[@]}")
             ready["$src"]=1
-            # Clean up picked marker so node can be retried next iteration
+            unset "jobs[$src→$tgt]" 2>/dev/null
             rm -f "/tmp/rsync-tree-picked-$pick_idx"
         else
-            touch "/tmp/rsync-tree-picked-$pick_idx"
             started=$((started + 1))
         fi
     done
@@ -352,5 +362,6 @@ echo "Verification (sample ~25%):"
 for n in "${ALL_NODES[@]}"; do
     [[ $((RANDOM % 4)) -ne 0 ]] && continue
     count=$(ssh $SSH_ARGS "$n" "ls $SRC_DIR 2>/dev/null | wc -l" 2>/dev/null || echo "?")
-    printf "  %-12s : %s files\n" "$n" "$count"
+    size=$(ssh $SSH_ARGS "$n" "du -sb $SRC_DIR 2>/dev/null | awk '{print \$1}'" 2>/dev/null || echo "?")
+    printf "  %-12s : %s files, %s bytes\n" "$n" "$count" "$size"
 done
