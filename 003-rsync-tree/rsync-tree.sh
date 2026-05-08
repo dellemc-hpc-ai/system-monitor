@@ -20,7 +20,7 @@ set -uo pipefail
 
 SOURCE_NODE="node12"
 SRC_DIR="/mnt/data"
-SSH_ARGS="-o StrictHostKeyChecking=no -o ConnectTimeout=10"
+SSH_ARGS="-o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ServerAliveInterval=10 -o BatchMode=yes"
 NODES_PATTERN='node[01-18]'
 DRY_RUN=""
 
@@ -288,13 +288,13 @@ check_complete() {
     local src_sz tgt_sz
     if ! src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}'); then
         echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2
-        echo "SSH FAILED" > /tmp/rsync-tree-abort
-        return 1
+        echo "SSH FAILED: $src" > /tmp/rsync-tree-abort
+        exit 1
     fi
     if ! tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}'); then
         echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2
-        echo "SSH FAILED" > /tmp/rsync-tree-abort
-        return 1
+        echo "SSH FAILED: $tgt" > /tmp/rsync-tree-abort
+        exit 1
     fi
 
     echo "  [DD] [$src] → [$tgt] size check: src=$src_sz tgt=$tgt_sz" >&2
@@ -309,7 +309,8 @@ check_complete() {
         echo "  Target : $tgt_sz bytes"
         echo "  Dir    : $SRC_DIR"
         echo "=============================================="
-        echo "[II] writing abort marker (size mismatch)" > /tmp/rsync-tree-abort
+        echo "SIZE MISMATCH" > /tmp/rsync-tree-abort
+        exit 1
     fi
 
     echo "$src_sz"
@@ -319,6 +320,12 @@ check_complete() {
 collect_ready() {
     local new_nodes=""
     declare -a newly_done=()
+
+    # Debug: dump current state to stderr
+    echo "  [CR] collect_ready called: ${#jobs[@]} jobs, ${#ready[@]} ready, ${#waiting[@]} waiting" >&2
+    for key in "${!jobs[@]}"; do
+        echo "  [CR]   job: $key pid=${jobs[$key]}" >&2
+    done
 
     # Check each active job
     for key in "${!jobs[@]}"; do
