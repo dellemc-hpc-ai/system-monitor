@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import psutil
@@ -313,36 +314,89 @@ def _get_net_throughput_mbs():
     return result
 
 
-# ─── GPU stats (utilization, memory) ─────────────────────────────────────────
+# ─── GPU stats (utilization, memory, PCIe/NVLink) — parallel execution ────────
+
+def _query_gpu_util_mem(gpu_id):
+    """Query utilization + memory for one GPU. Returns (gpu_id, dict) or (gpu_id, None)."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--id=" + str(gpu_id),
+             "--query-gpu=utilization.gpu,memory.used,memory.total",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, check=True, timeout=8
+        )
+        util, mem_used, mem_total = result.stdout.strip().split(", ")
+        return (gpu_id, {
+            "id": gpu_id,
+            "utilization": float(util),
+            "memory_used_mb": float(mem_used),
+            "memory_total_mb": float(mem_total)
+        })
+    except Exception as e:
+        return (gpu_id, {"id": gpu_id, "error": str(e)})
+
+
+def _query_gpu_power(gpu_id):
+    """Query power for one GPU. Returns (gpu_id, dict) or (gpu_id, None)."""
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--id=" + str(gpu_id),
+             "--query-gpu=power.draw,power.limit",
+             "--format=csv,noheader,nounits"],
+            capture_output=True, text=True, check=True, timeout=8
+        )
+        power_draw, power_limit = result.stdout.strip().split(", ")
+        return (gpu_id, {
+            "id": gpu_id,
+            "power_w": float(power_draw),
+            "power_limit_w": float(power_limit)
+        })
+    except Exception as e:
+        return (gpu_id, {"id": gpu_id, "error": str(e)})
+
 
 def get_gpu_stats(enable_nvlink=True):
-    """Collect stats for all available GPUs (up to 8). Returns a list."""
+    """
+    Collect stats for all GPUs in parallel.
+    GPU util/mem queries (x8) + dmon (x1, NVLink) all run concurrently.
+    Returns (gpu_stats_list, gpu_power_list, gpu_io_list).
+    """
     if not GPU_AVAILABLE or GPU_COUNT == 0:
-        return None
-    gpu_io = get_gpu_io(enabled=enable_nvlink)   # PCIe/NVLink via nvidia-smi dmon
-    gpus = []
-    for i in range(GPU_COUNT):
-        try:
-            result = subprocess.run(
-                ["nvidia-smi", "--id=" + str(i),
-                 "--query-gpu=utilization.gpu,memory.used,memory.total",
-                 "--format=csv,noheader,nounits"],
-                capture_output=True, text=True, check=True, timeout=5
-            )
-            util, mem_used, mem_total = result.stdout.strip().split(", ")
-            gpu_entry = {
-                "id": i,
-                "utilization": float(util),
-                "memory_used_mb": float(mem_used),
-                "memory_total_mb": float(mem_total)
-            }
-            if gpu_io:
-                io_entry = next((g for g in gpu_io if g.get("id") == i), {})
-                gpu_entry.update(io_entry)
-            gpus.append(gpu_entry)
-        except Exception as e:
-            gpus.append({"id": i, "error": str(e)})
-    return gpus
+        return None, None, None
+
+    # GPU util+mem queries — one worker per GPU
+    with ThreadPoolExecutor(max_workers=GPU_COUNT) as ex:
+        util_mem_futures = [ex.submit(_query_gpu_util_mem, i) for i in range(GPU_COUNT)]
+        util_mem_results = [f.result() for f in util_mem_futures]
+
+    # NVLink/PCIe via dmon — runs in parallel with the GPU queries above
+    gpu_io = get_gpu_io(enabled=enable_nvlink)  # single dmon subprocess
+
+    # gpu_power queries — also parallel with dmon (they're all nvidia-smi)
+    with ThreadPoolExecutor(max_workers=GPU_COUNT) as ex:
+        power_futures = [ex.submit(_query_gpu_power, i) for i in range(GPU_COUNT)]
+        power_results = [f.result() for f in power_futures]
+
+    # Build gpu_stats list
+    gpus = [None] * GPU_COUNT
+    for gpu_id, entry in util_mem_results:
+        gpus[gpu_id] = entry
+
+    # Merge NVLink/PCIe into gpu entries
+    if gpu_io:
+        io_map = {g["id"]: g for g in gpu_io}
+        for i in range(GPU_COUNT):
+            io_entry = io_map.get(i, {})
+            # Merge but skip 'id' key to avoid duplicate
+            for k, v in io_entry.items():
+                if k != "id" and gpus[i] is not None:
+                    gpus[i][k] = v
+
+    # Build gpu_power list
+    power_map = {r[0]: r[1] for r in power_results}
+    gpu_power = [power_map.get(i, {"id": i}) for i in range(GPU_COUNT)]
+
+    return gpus, gpu_power, gpu_io
 
 
 # ─── Main collect ──────────────────────────────────────────────────────────────
@@ -351,10 +405,11 @@ def collect(enable_nvlink=True):
     cpu_percent = psutil.cpu_percent(interval=0.5)
     mem = psutil.virtual_memory()
     net = _get_net_throughput_mbs()
-    sys_power = get_system_power()  # BMC whole-machine AC power
-    cpu_power = get_cpu_power()     # RAPL CPU package power
-    gpu_power = get_gpu_power()
-    gpu_stats = get_gpu_stats(enable_nvlink=enable_nvlink)   # PCIe/NVLink via nvidia-smi dmon
+    sys_power = get_system_power()   # BMC whole-machine AC power
+    cpu_power = get_cpu_power()      # RAPL CPU package power
+
+    # All GPU queries (util/mem x8 + power x8 + dmon x1) run in parallel
+    gpu_stats, gpu_power, _ = get_gpu_stats(enable_nvlink=enable_nvlink)
 
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
