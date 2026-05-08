@@ -119,6 +119,43 @@ declare -a waiting=()
 declare -A jobs=()    # "src→tgt" => pid
 declare -A ready=()
 
+# ---- Cleanup on exit ----
+cleanup() {
+    echo ""
+    echo "[cleanup] Cleaning up..."
+
+    # Kill all remaining rsync child processes
+    if [[ ${#jobs[@]} -gt 0 ]]; then
+        echo "[cleanup] Killing ${#jobs[@]} remaining rsync jobs..."
+        for key in "${!jobs[@]}"; do
+            local pid=${jobs[$key]}
+            echo "[cleanup]   killing pid $pid ($key)"
+            kill -9 "$pid" 2>/dev/null
+        done
+    fi
+
+    # Kill any stray rsync processes started by this script
+    # (they fork, so the direct child may not be the rsync process itself)
+    # Use the script's pid as the leader to find process group
+    if [[ -n "${SCRIPT_PID:-}" ]]; then
+        pkill -9 -P "$SCRIPT_PID" 2>/dev/null
+    fi
+
+    # Remove all marker files
+    echo "[cleanup] Removing marker files..."
+    rm -f /tmp/rsync-tree-pid-* \
+          /tmp/rsync-tree-checked-* \
+          /tmp/rsync-tree-picked-* \
+          /tmp/rsync-tree-done-* \
+          /tmp/rsync-tree-wait.lock \
+          /tmp/rsync-tree-abort
+
+    echo "[cleanup] Done."
+}
+
+trap cleanup EXIT
+SCRIPT_PID=$$
+
 for n in "${ALL_NODES[@]}"; do
     if [[ "$n" == "$SOURCE_NODE" ]]; then
         ready["$n"]=1
@@ -282,6 +319,7 @@ check_complete() {
         echo "  Exit code: $rsync_exit"
         echo "=============================================="
         echo "[II] writing abort marker (rsync exit)" > /tmp/rsync-tree-abort
+        exit 1
     fi
 
     # Verify both sides have same byte count
