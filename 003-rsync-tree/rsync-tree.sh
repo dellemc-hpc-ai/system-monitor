@@ -191,13 +191,26 @@ do_rsync() {
 collect_ready() {
     local new_nodes=""
 
+    # Check which rsync jobs have finished
     for tgt in "${!active[@]}"; do
         local pid="${active[$tgt]}"
         if ! kill -0 "$pid" 2>/dev/null; then
             wait "$pid" 2>/dev/null
+
+            # Find the source that was sending to this target
+            local src
+            for s in "${!active[@]}"; do
+                [[ "${active[$s]}" == "$tgt" ]] && src="$s" && break
+            done
+
+            # Clear BOTH entries: target is done, source is now free
             unset "active[$tgt]"
+            [[ -n "$src" ]] && unset "active[$src]"
+
+            # Both nodes now have full data and are available as sources
             ready["$tgt"]=1
-            new_nodes="$new_nodes $tgt"
+            [[ -n "$src" ]] && ready["$src"]=1
+            new_nodes="$new_nodes $tgt${src:+ }$src"
         fi
     done
 
