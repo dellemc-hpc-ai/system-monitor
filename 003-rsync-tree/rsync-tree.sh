@@ -310,10 +310,16 @@ collect_ready() {
                 newly_done+=("$src" "$tgt" "$key")
             fi
         else
-            # In real mode, use check_complete which verifies sizes
-            if result=$(check_complete "$src" "$tgt"); then
+            # In real mode, check_complete validates the job:
+            # - return 1  = job still running / not ready (skip for now)
+            # - exit 1    = hard failure (rsync failed / size mismatch)
+            #              -> terminates the entire script
+            # - returns 0 = job completed successfully
+            check_complete "$src" "$tgt"; cr=$?
+            if [[ $cr -eq 0 ]]; then
                 newly_done+=("$src" "$tgt" "$key")
             fi
+            # if cr != 0 but didn't exit, job is still in progress — just skip
         fi
     done
 
