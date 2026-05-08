@@ -185,25 +185,35 @@ do_rsync() {
 check_complete() {
     local src=$1 tgt=$2
     local log="/tmp/rsync-$src-$tgt.log"
+    local pidfile="/tmp/rsync-tree-pid-$src→$tgt"
 
     if [[ -n "$DRY_RUN" ]]; then
-        [[ -f "/tmp/rsync-tree-done-$src→$tgt" ]] && echo "0" && return 0
+        if [[ -f "/tmp/rsync-tree-done-$src→$tgt" ]]; then
+            echo "0"
+            return 0
+        fi
         return 1
     fi
 
-    # rsync must have exited cleanly
-    local pidfile="/tmp/rsync-tree-pid-$src→$tgt"
+    # Job not started yet (no pidfile)
     if [[ ! -f "$pidfile" ]]; then
+        echo "  [??] [$src] → [$tgt] no pidfile yet" >&2
         return 1
     fi
+
     local pid=$(cat "$pidfile")
+    echo "  [DD] [$src] → [$tgt] pid=$pid" >&2
+
+    # Check if process still running
     if kill -0 "$pid" 2>/dev/null; then
+        echo "  [~~] [$src] → [$tgt] pid $pid still running" >&2
         return 1  # still running
     fi
 
-    # Capture rsync exit status
+    # Process has exited — wait for it and get exit status (only ONE wait per pid!)
     local rsync_exit=0
     wait "$pid" || rsync_exit=$?
+    echo "  [DD] [$src] → [$tgt] pid $pid exited with status $rsync_exit" >&2
 
     if [[ $rsync_exit -ne 0 ]]; then
         echo ""
@@ -227,10 +237,12 @@ check_complete() {
         exit 1
     fi
 
-    # Verify both sides have same byte count (directory already synced, check size)
+    # Verify both sides have same byte count
     local src_sz tgt_sz
     src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2; exit 1; }
     tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2; exit 1; }
+
+    echo "  [DD] [$src] → [$tgt] size check: src=$src_sz tgt=$tgt_sz" >&2
 
     if [[ "$src_sz" != "$tgt_sz" ]]; then
         echo ""
