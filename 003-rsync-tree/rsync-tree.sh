@@ -201,20 +201,48 @@ check_complete() {
         return 1  # still running
     fi
 
-    # Check rsync exit status
-    if ! wait "$pid"; then
-        echo "  [!!] [$src] → [$tgt] rsync failed, check $log" >&2
-        return 1
+    # Capture rsync exit status
+    local rsync_exit=0
+    wait "$pid" || rsync_exit=$?
+
+    if [[ $rsync_exit -ne 0 ]]; then
+        echo ""
+        echo "=============================================="
+        echo " RSYNC FAILED — aborting"
+        echo "=============================================="
+        echo "  Source : $src"
+        echo "  Target : $tgt"
+        echo "  Command: rsync -av \\"
+        echo "             -e \"ssh $SSH_ARGS\" \\"
+        echo "             --rsync-path=\"sudo rsync\" \\"
+        echo "             $SRC_DIR/ \\"
+        echo "             ${tgt}:$SRC_DIR/"
+        echo "  Log    : $log"
+        echo ""
+        echo "--- rsync stdout/stderr ($log) ---"
+        cat "$log"
+        echo "------------------------------------------"
+        echo "  Exit code: $rsync_exit"
+        echo "=============================================="
+        exit 1
     fi
 
     # Verify both sides have same byte count (directory already synced, check size)
     local src_sz tgt_sz
-    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || return 1
-    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || return 1
+    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2; exit 1; }
+    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2; exit 1; }
 
     if [[ "$src_sz" != "$tgt_sz" ]]; then
-        echo "  [!!] [$src] → [$tgt] size mismatch: src=$src_sz tgt=$tgt_sz" >&2
-        return 1
+        echo ""
+        echo "=============================================="
+        echo " SIZE MISMATCH — aborting"
+        echo "=============================================="
+        echo "  Job    : $src → $tgt"
+        echo "  Source : $src_sz bytes"
+        echo "  Target : $tgt_sz bytes"
+        echo "  Dir    : $SRC_DIR"
+        echo "=============================================="
+        exit 1
     fi
 
     echo "$src_sz"
@@ -305,8 +333,7 @@ while true; do
     started=0
 
     for src in "${!ready[@]}"; do
-        # Is this source already busy (has an active job)?
-        [[ -n "${jobs[$src→*]:-}" ]] && continue  # starts-with check not directly supported, use loop
+        # Is this source already busy (has an active job as source)?
         is_busy=0
         for key in "${!jobs[@]}"; do
             [[ "${key%%→*}" == "$src" ]] && is_busy=1 && break
