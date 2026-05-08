@@ -169,9 +169,8 @@ do_rsync() {
         return 0
     fi
 
-    rsync -av \
+    rsync -av --inplace \
         -e "ssh $SSH_ARGS" \
-        --rsync-path="sudo rsync" \
         "$SRC_DIR/" \
         "${tgt}:$SRC_DIR/" \
         &> "$log" &
@@ -222,9 +221,8 @@ check_complete() {
         echo "=============================================="
         echo "  Source : $src"
         echo "  Target : $tgt"
-        echo "  Command: rsync -av \\"
+        echo "  Command: rsync -av --inplace \\"
         echo "             -e \"ssh $SSH_ARGS\" \\"
-        echo "             --rsync-path=\"sudo rsync\" \\"
         echo "             $SRC_DIR/ \\"
         echo "             ${tgt}:$SRC_DIR/"
         echo "  Log    : $log"
