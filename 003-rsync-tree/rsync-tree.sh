@@ -218,8 +218,8 @@ check_complete() {
                 echo "------------------------------------------" >&2
                 echo "  Exit code: $rsync_exit" >&2
                 echo "==============================================" >&2
-                echo "[II] calling exit 1 NOW" >&2
-                exit 1
+                echo "[II] calling kill -9 $$ NOW" >&2
+                kill -9 $$; exit 99
             fi
             # Success — fall through to size check below
         else
@@ -267,13 +267,13 @@ check_complete() {
         echo "------------------------------------------"
         echo "  Exit code: $rsync_exit"
         echo "=============================================="
-        exit 1
+        kill -9 $$; exit 99
     fi
 
     # Verify both sides have same byte count
     local src_sz tgt_sz
-    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2; exit 1; }
-    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2; exit 1; }
+    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2; kill -9 $$; }
+    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2; kill -9 $$; }
 
     echo "  [DD] [$src] → [$tgt] size check: src=$src_sz tgt=$tgt_sz" >&2
 
@@ -287,7 +287,7 @@ check_complete() {
         echo "  Target : $tgt_sz bytes"
         echo "  Dir    : $SRC_DIR"
         echo "=============================================="
-        exit 1
+        kill -9 $$; exit 99
     fi
 
     echo "$src_sz"
