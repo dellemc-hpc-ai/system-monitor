@@ -254,6 +254,9 @@ def get_gpu_io(enabled=True):
             "nvltx_mbs": nvltx,
         }
 
+    if _GPU_IO_DEBUG:
+        sys.stderr.write(f"[get_gpu_io] DEBUG return: {[gpus_io.get(i) for i in range(min(GPU_COUNT,8))]}\n")
+
     return [gpus_io.get(i, {"id": i}) for i in range(GPU_COUNT)]
 
 
