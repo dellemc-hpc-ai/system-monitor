@@ -406,8 +406,18 @@ def daemon(interval=10):
                 net_str = " " + "/".join(
                     f"{n['name']}={n['rx_mbs']:.1f}/{n['tx_mbs']:.1f}MB/s" for n in stats["network"]
                 )
+            gpu_str = ""
+            if stats.get("gpu"):
+                for g in stats["gpu"]:
+                    nv = ""
+                    if g.get("nvlrx_mbs") is not None:
+                        nv = f" NV={g['nvlrx_mbs']:.1f}/{g['nvltx_mbs']:.1f}MB/s"
+                    elif g.get("rxpci_mbs") is not None:
+                        nv = f" PCIe={g['rxpci_mbs']:.1f}/{g['txpci_mbs']:.1f}MB/s"
+                    gpu_str += f" GPU{g['id']}={g.get('utilization','?')}%{nv}"
+
             print(f"[{stats['timestamp']}] CPU={stats['cpu_percent']}% "
-                  f"MEM={stats['memory_percent']}%{pwr_str}{net_str}")
+                  f"MEM={stats['memory_percent']}%{pwr_str}{gpu_str}{net_str}")
         except Exception as e:
             print(f"Error: {e}")
         time.sleep(interval)
