@@ -130,6 +130,20 @@ done
 echo "Initial: 1 source, ${#waiting[@]} need data"
 echo ""
 
+# Clean up any stale state from previous runs
+echo "[cleanup] Removing stale pidfiles, checked markers, picked markers..."
+rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock
+
+# Warn if there are leftover rsync processes from previous runs
+stale_pids=$(ps aux | grep '[r]sync.*node0' | awk '{print $2, $11, $12, $13, $14, $15, $16}')
+if [[ -n "$stale_pids" ]]; then
+    echo "[WARN] Found stale rsync processes from previous runs:"
+    echo "$stale_pids"
+    echo "[WARN] These may interfere. Consider killing them with: kill $(echo "$stale_pids" | awk '{print $1}')"
+fi
+
+echo ""
+
 LOGFILE="/tmp/rsync-tree.log"
 > "$LOGFILE"
 
@@ -218,8 +232,8 @@ check_complete() {
                 echo "------------------------------------------" >&2
                 echo "  Exit code: $rsync_exit" >&2
                 echo "==============================================" >&2
-                echo "[II] calling kill -9 $$ NOW" >&2
-                kill -9 $$; exit 99
+                echo "[II] writing abort marker" >&2
+                echo "RSYNC FAILED" > /tmp/rsync-tree-abort
             fi
             # Success — fall through to size check below
         else
@@ -267,13 +281,21 @@ check_complete() {
         echo "------------------------------------------"
         echo "  Exit code: $rsync_exit"
         echo "=============================================="
-        kill -9 $$; exit 99
+        echo "[II] writing abort marker (rsync exit)" > /tmp/rsync-tree-abort
     fi
 
     # Verify both sides have same byte count
     local src_sz tgt_sz
-    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2; kill -9 $$; }
-    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}') || { echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2; kill -9 $$; }
+    if ! src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}'); then
+        echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2
+        echo "SSH FAILED" > /tmp/rsync-tree-abort
+        return 1
+    fi
+    if ! tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}'); then
+        echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2
+        echo "SSH FAILED" > /tmp/rsync-tree-abort
+        return 1
+    fi
 
     echo "  [DD] [$src] → [$tgt] size check: src=$src_sz tgt=$tgt_sz" >&2
 
@@ -287,7 +309,7 @@ check_complete() {
         echo "  Target : $tgt_sz bytes"
         echo "  Dir    : $SRC_DIR"
         echo "=============================================="
-        kill -9 $$; exit 99
+        echo "[II] writing abort marker (size mismatch)" > /tmp/rsync-tree-abort
     fi
 
     echo "$src_sz"
@@ -359,6 +381,16 @@ while true; do
     iter=$((iter + 1))
 
     collect_ready
+
+    # Check for abort marker — written by check_complete on hard failure
+    if [[ -f /tmp/rsync-tree-abort ]]; then
+        echo ""
+        echo "=============================================="
+        echo " SCRIPT ABORTING — see RSYNC FAILED details above"
+        echo "=============================================="
+        cat /tmp/rsync-tree-abort
+        exit 1
+    fi
 
     n_active=${#jobs[@]}
     n_ready=${#ready[@]}
