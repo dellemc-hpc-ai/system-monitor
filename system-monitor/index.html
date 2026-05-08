@@ -455,8 +455,8 @@ async function refresh() {
         if (!seen.has(f)) { seen.add(f); files.push(f); }
         cur.setDate(cur.getDate() + 1);
       }
-      timeCutoff = startMs;
-      timeEnd    = endMs;
+      cutoff  = startMs;
+      timeEnd = endMs;
     }
   }
 
