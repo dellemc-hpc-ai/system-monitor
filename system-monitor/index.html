@@ -62,7 +62,11 @@
   <button id="btn-day" onclick="setRange('day')">Day</button>
   <button id="btn-week" onclick="setRange('week')">Week</button>
   <button id="btn-custom" onclick="setRange('custom')" style="border-color:#555">Custom</button>
-  <input type="date" id="custom-date" style="background:#1e2230;color:#e0e0e0;border:1px solid #333;padding:4px 8px;border-radius:6px;font-size:0.85rem;display:none" onchange="onCustomDateChange()" />
+  <span id="custom-range" style="display:none;align-items:center;gap:4px">
+    <input type="datetime-local" id="custom-start" onchange="onCustomDateChange()" />
+    <span style="color:#666;font-size:0.8rem">→</span>
+    <input type="datetime-local" id="custom-end" onchange="onCustomDateChange()" />
+  </span>
   <button onclick="refresh()" style="margin-left:auto">🔄 Refresh</button>
 </div>
 
@@ -328,14 +332,24 @@ function setRange(r) {
   currentRange = r;
   ['btn-hour','btn-day','btn-week','btn-custom'].forEach(id => document.getElementById(id).classList.remove('active'));
   document.getElementById('btn-' + r).classList.add('active');
-  const dateInput = document.getElementById('custom-date');
+  const customRange = document.getElementById('custom-range');
   if (r === 'custom') {
-    dateInput.style.display = 'inline-block';
-    dateInput.focus();
+    customRange.style.display = 'inline-flex';
+    // Default: start = now-3h, end = now
+    const now = new Date();
+    const threeHrsAgo = new Date(now.getTime() - 3 * 3600000);
+    document.getElementById('custom-end').value = fmtLocal(now);
+    document.getElementById('custom-start').value = fmtLocal(threeHrsAgo);
   } else {
-    dateInput.style.display = 'none';
+    customRange.style.display = 'none';
   }
   refresh();
+}
+
+function fmtLocal(d) {
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate())
+       + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
 
 function onCustomDateChange() {
@@ -410,7 +424,8 @@ async function refresh() {
   // For day: today + yesterday UTC  (covers local 00:00–04:59 boundary)
   // For week: last 7 UTC dates       (covers a full week of UTC files)
   const now    = Date.now();
-  const cutoff = now - (RANGES[currentRange] * 1000);
+  let   cutoff = now - (RANGES[currentRange] * 1000);
+  let   timeEnd = Infinity;
   const d     = new Date();
   const yd    = new Date(d.getTime() - 86400000);
   const todayUTC     = d.toISOString().slice(0, 10).replace(/-/g, '');
@@ -426,19 +441,23 @@ async function refresh() {
       if (!files.includes(f)) files.push('data/metrics_' + hostname + '_' + f + '.json');
     });
   } else if (currentRange === 'custom') {
-    const dateInput = document.getElementById('custom-date');
-    if (dateInput.value) {
-      // Convert local date string (YYYY-MM-DD) to UTC date string (YYYYMMDD)
-      const localDate = new Date(dateInput.value + 'T00:00:00');
-      const utcStr = localDate.toISOString().slice(0, 10).replace(/-/g, '');
-      files = ['data/metrics_' + hostname + '_' + utcStr + '.json'];
+    const startInput = document.getElementById('custom-start');
+    const endInput   = document.getElementById('custom-end');
+    if (startInput.value && endInput.value) {
+      const startMs = new Date(startInput.value).getTime();
+      const endMs   = new Date(endInput.value).getTime();
+      // Collect all UTC date files that fall within [startMs, endMs]
+      const seen = new Set();
+      const cur  = new Date(startMs);
+      while (cur.getTime() <= endMs) {
+        const utcStr = cur.toISOString().slice(0, 10).replace(/-/g, '');
+        const f = 'data/metrics_' + hostname + '_' + utcStr + '.json';
+        if (!seen.has(f)) { seen.add(f); files.push(f); }
+        cur.setDate(cur.getDate() + 1);
+      }
+      timeCutoff = startMs;
+      timeEnd    = endMs;
     }
-  }
-
-  // ── Time-filter: for 'custom' range, show all data from the selected day (no cutoff)
-  let timeCutoff = cutoff;
-  if (currentRange === 'custom') {
-    timeCutoff = 0;
   }
 
   // ── Fetch & parse
@@ -454,7 +473,11 @@ async function refresh() {
   }
 
   // ── Time-filter
-  allData = allData.filter(d => new Date(d.timestamp).getTime() > timeCutoff);
+  allData = allData.filter(d => {
+    const t = new Date(d.timestamp).getTime();
+    if (currentRange === 'custom') return t >= cutoff && t <= timeEnd;
+    return t > cutoff;
+  });
   allData.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
 
   if (allData.length === 0) {
