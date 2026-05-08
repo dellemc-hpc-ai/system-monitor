@@ -198,7 +198,7 @@ collect_ready() {
             wait "$pid" 2>/dev/null
 
             # Find the source that was sending to this target
-            local src
+            src=""
             for s in "${!active[@]}"; do
                 [[ "${active[$s]}" == "$tgt" ]] && src="$s" && break
             done
