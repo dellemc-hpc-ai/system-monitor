@@ -325,6 +325,8 @@ while true; do
             # Revert: put target back in waiting, source back in ready
             waiting=("$tgt" "${waiting[@]}")
             ready["$src"]=1
+            # Clean up picked marker so node can be retried next iteration
+            rm -f "/tmp/rsync-tree-picked-$pick_idx"
         else
             touch "/tmp/rsync-tree-picked-$pick_idx"
             started=$((started + 1))
