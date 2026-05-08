@@ -196,8 +196,37 @@ check_complete() {
 
     # Job not started yet (no pidfile)
     if [[ ! -f "$pidfile" ]]; then
-        echo "  [??] [$src] → [$tgt] no pidfile yet" >&2
-        return 1
+        # Check if we already processed this job and recorded an exit status
+        local checked="/tmp/rsync-tree-checked-$src→$tgt"
+        if [[ -f "$checked" ]]; then
+            local rsync_exit=$(cat "$checked")
+            echo "  [DD] [$src] → [$tgt] already waited, exit=$rsync_exit (from marker)" >&2
+            # Still non-zero? fail and exit
+            if [[ $rsync_exit -ne 0 ]]; then
+                echo ""
+                echo "=============================================="
+                echo " RSYNC FAILED — aborting"
+                echo "=============================================="
+                echo "  Source : $src"
+                echo "  Target : $tgt"
+                echo "  Command: rsync -av --inplace \\"
+                echo "             -e \"ssh $SSH_ARGS\" \\"
+                echo "             $SRC_DIR/ \\"
+                echo "             ${tgt}:$SRC_DIR/"
+                echo "  Log    : $log"
+                echo ""
+                echo "--- rsync stdout/stderr ($log) ---"
+                cat "$log"
+                echo "------------------------------------------"
+                echo "  Exit code: $rsync_exit"
+                echo "=============================================="
+                exit 1
+            fi
+            # Success — fall through to size check
+        else
+            echo "  [??] [$src] → [$tgt] no pidfile yet" >&2
+            return 1
+        fi
     fi
 
     local pid=$(cat "$pidfile")
@@ -213,6 +242,10 @@ check_complete() {
     local rsync_exit=0
     wait "$pid" || rsync_exit=$?
     echo "  [DD] [$src] → [$tgt] pid $pid exited with status $rsync_exit" >&2
+
+    # Record exit status so subsequent iterations don't wait again
+    echo "$rsync_exit" > "/tmp/rsync-tree-checked-$src→$tgt"
+    rm -f "$pidfile"
 
     if [[ $rsync_exit -ne 0 ]]; then
         echo ""
@@ -374,7 +407,9 @@ while true; do
             waiting=("$tgt" "${waiting[@]}")
             ready["$src"]=1
             unset "jobs[$src→$tgt]" 2>/dev/null
-            rm -f "/tmp/rsync-tree-picked-$pick_idx"
+            rm -f "/tmp/rsync-tree-pid-$src→$tgt" \
+                  "/tmp/rsync-tree-checked-$src→$tgt" \
+                  "/tmp/rsync-tree-picked-$pick_idx"
         else
             started=$((started + 1))
         fi
