@@ -241,8 +241,11 @@ def get_gpu_io(enabled=True):
         #   Both are in GPM:MiB/s → convert to MB/s (×1.048576)
         rxpci = val("rxpci")
         txpci = val("txpci")
-        nvlrx_raw = val("nvlrx") or val("pcirx")
-        nvltx_raw = val("nvltx") or val("pcitx")
+        # Must use "is not None" — val() returns float which can be 0.0 (falsy)
+        _nvlrx = val("nvlrx")
+        _nvltx = val("nvltx")
+        nvlrx_raw = _nvlrx if _nvlrx is not None else val("pcirx")
+        nvltx_raw = _nvltx if _nvltx is not None else val("pcitx")
         nvlrx = round(nvlrx_raw * 1.048576, 3) if nvlrx_raw is not None else None
         nvltx = round(nvltx_raw * 1.048576, 3) if nvltx_raw is not None else None
 
