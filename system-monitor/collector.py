@@ -404,6 +404,8 @@ def get_gpu_stats(enable_nvlink=True):
             for k, v in io_entry.items():
                 if k != "id" and gpus[i] is not None:
                     gpus[i][k] = v
+            if _GPU_IO_DEBUG and gpus[i]:
+                sys.stderr.write(f"[get_gpu_stats] DEBUG gpu[{i}] after io merge: nvlrx={gpus[i].get('nvlrx_mbs')} nvltx={gpus[i].get('nvltx_mbs')}\n")
 
     # Build gpu_power list
     power_map = {r[0]: r[1] for r in power_results}
