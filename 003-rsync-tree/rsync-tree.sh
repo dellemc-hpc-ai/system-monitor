@@ -201,34 +201,41 @@ check_complete() {
         if [[ -f "$checked" ]]; then
             local rsync_exit=$(cat "$checked")
             echo "  [DD] [$src] → [$tgt] already waited, exit=$rsync_exit (from marker)" >&2
+            echo "  [DD]   [[ $rsync_exit -ne 0 ]] = $([[ $rsync_exit -ne 0 ]] && echo true || echo false)" >&2
             # Still non-zero? fail and exit
             if [[ $rsync_exit -ne 0 ]]; then
-                echo ""
-                echo "=============================================="
-                echo " RSYNC FAILED — aborting"
-                echo "=============================================="
-                echo "  Source : $src"
-                echo "  Target : $tgt"
-                echo "  Command: rsync -av --inplace \\"
-                echo "             -e \"ssh $SSH_ARGS\" \\"
-                echo "             $SRC_DIR/ \\"
-                echo "             ${tgt}:$SRC_DIR/"
-                echo "  Log    : $log"
-                echo ""
-                echo "--- rsync stdout/stderr ($log) ---"
-                cat "$log"
-                echo "------------------------------------------"
-                echo "  Exit code: $rsync_exit"
-                echo "=============================================="
+                echo "" >&2
+                echo "==============================================" >&2
+                echo " RSYNC FAILED — aborting" >&2
+                echo "==============================================" >&2
+                echo "  Source : $src" >&2
+                echo "  Target : $tgt" >&2
+                echo "  Command: rsync -av --inplace \\" >&2
+                echo "             -e \"ssh $SSH_ARGS\" \\" >&2
+                echo "             $SRC_DIR/ \\" >&2
+                echo "             ${tgt}:$SRC_DIR/" >&2
+                echo "  Log    : $log" >&2
+                echo "" >&2
+                echo "--- rsync stdout/stderr ($log) ---" >&2
+                cat "$log" >&2
+                echo "------------------------------------------" >&2
+                echo "  Exit code: $rsync_exit" >&2
+                echo "==============================================" >&2
+                echo "[II] calling exit 1 NOW" >&2
                 exit 1
             fi
-            # Success — fall through to size check
+            # Success — fall through to size check below
         else
-            echo "  [??] [$src] → [$tgt] no pidfile yet" >&2
+            echo "  [??] [$src] → [$tgt] no pidfile, no checked marker — not started?" >&2
             return 1
         fi
     fi
 
+    # pidfile must exist here — read it
+    if [[ ! -f "$pidfile" ]]; then
+        echo "  [!!] [$src] → [$tgt] pidfile gone unexpectedly!" >&2
+        return 1
+    fi
     local pid=$(cat "$pidfile")
     echo "  [DD] [$src] → [$tgt] pid=$pid" >&2
 
