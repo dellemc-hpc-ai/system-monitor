@@ -170,11 +170,12 @@ pick_waiting() {
 
     echo "  [PICK] waiting[@]=${#waiting[@]}  waiting=${waiting[*]}" >&2
     for ((i=0; i<${#waiting[@]}; i++)); do
-        if [[ -f "/tmp/rsync-tree-picked-$i" ]]; then
+        local picked_file="/tmp/rsync-tree-picked-$SCRIPT_RUN_ID-$i"
+        if [[ -f "$picked_file" ]]; then
             echo "  [PICK]   [$i] ${waiting[$i]} SKIP (picked file exists)" >&2
             continue
         fi
-        touch "/tmp/rsync-tree-picked-$i"
+        touch "$picked_file"
         rmdir "$lock"
         echo "  [PICK]   [$i] ${waiting[$i]} PICKED" >&2
         printf '%s\n%s' "$i" "${waiting[$i]}"
@@ -383,6 +384,8 @@ print_summary() {
     fi
 }
 
+SCRIPT_RUN_ID="$(date +%s)"
+
 # ---- Clean up stale locks/picked files from previous runs ----
 rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock
 
@@ -456,7 +459,7 @@ while true; do
             unset "jobs[$src→$tgt]" 2>/dev/null
             rm -f "/tmp/rsync-tree-pid-$src→$tgt" \
                   "/tmp/rsync-tree-checked-$src→$tgt" \
-                  "/tmp/rsync-tree-picked-$pick_idx"
+                  "/tmp/rsync-tree-picked-$SCRIPT_RUN_ID-$pick_idx"
         else
             started=$((started + 1))
         fi
