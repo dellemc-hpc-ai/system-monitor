@@ -463,10 +463,11 @@ def append_to_file(data, period):
 def daemon(interval=10):
     gpu_label = f"{GPU_COUNT}x GPU" if GPU_COUNT else "no GPU"
     enable_nvlink = (interval >= 10)
-    if not enable_nvlink:
+    if interval < 10:
         print("\n" + "=" * 60)
-        print("\033[91m  WARNING: NVLink/PCIe monitoring is DISABLED\033[0m")
-        print(f"           enable_nvlink requires interval >= 10s (current: {interval}s)")
+        print("\033[91m  WARNING: NVLink/PCIe monitoring will NOT start\033[0m")
+        print(f"           This feature requires interval >= 10s (current: {interval}s)")
+        print(f"           PCIe/NVLink data will NOT be collected.")
         print(f"           Rerun with: python3 collector.py --interval 10")
         print("=" * 60 + "\n")
     print(f"Collector starting on [{HOSTNAME}], interval={interval}s, NVLink={'enabled' if enable_nvlink else 'disabled'}, GPU={gpu_label}")
