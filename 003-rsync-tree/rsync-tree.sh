@@ -167,18 +167,21 @@ done
 echo "Initial: 1 source, ${#waiting[@]} need data"
 echo ""
 
-# Clean up any stale state from previous runs
-echo "[cleanup] Removing stale pidfiles, checked markers, picked markers..."
-rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock
+# DIAGNOSTIC: list ALL stale state before cleaning
+echo "[DIAG] === Pre-cleanup stale file scan ==="
+ls /tmp/rsync-tree-* 2>&1 | head -50
+echo "[DIAG] === Stale rsync processes ==="
+stale_pids=$(ps aux | grep '[r]sync' | grep -v grep | awk '{print $2, $11, $12, $13, $14, $15, $16}')
+echo "$stale_pids"
+echo "[DIAG] ==========================================="
 
-# Warn if there are leftover rsync processes from previous runs
-stale_pids=$(ps aux | grep '[r]sync.*node0' | awk '{print $2, $11, $12, $13, $14, $15, $16}')
-if [[ -n "$stale_pids" ]]; then
-    echo "[WARN] Found stale rsync processes from previous runs:"
-    echo "$stale_pids"
-    echo "[WARN] These may interfere. Consider killing them with: kill $(echo "$stale_pids" | awk '{print $1}')"
-fi
+# Nuclear cleanup: remove ALL stale state from previous runs
+rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock /tmp/rsync-tree-abort /tmp/rsync-tree-diag.txt /tmp/rsync-diag-check.txt
 
+# Also clean up stale log files from previous runs
+rm -f /tmp/rsync-*.log
+
+echo "[cleanup] Done. Running main loop..."
 echo ""
 
 LOGFILE="/tmp/rsync-tree.log"
