@@ -168,15 +168,19 @@ pick_waiting() {
     local lock="/tmp/rsync-tree-wait.lock"
     while ! mkdir "$lock" 2>/dev/null; do sleep 0.05; done
 
+    echo "  [PICK] waiting[@]=${#waiting[@]}  waiting=${waiting[*]}" >&2
     for ((i=0; i<${#waiting[@]}; i++)); do
         if [[ -f "/tmp/rsync-tree-picked-$i" ]]; then
+            echo "  [PICK]   [$i] ${waiting[$i]} SKIP (picked file exists)" >&2
             continue
         fi
         touch "/tmp/rsync-tree-picked-$i"
         rmdir "$lock"
+        echo "  [PICK]   [$i] ${waiting[$i]} PICKED" >&2
         printf '%s\n%s' "$i" "${waiting[$i]}"
         return
     done
+    echo "  [PICK]   no unpicked nodes found — returning empty" >&2
 
     rmdir "$lock"
     echo ""
@@ -422,13 +426,14 @@ while true; do
         for key in "${!jobs[@]}"; do
             [[ "${key%%→*}" == "$src" ]] && is_busy=1 && break
         done
-        [[ $is_busy -eq 1 ]] && continue
+        if [[ $is_busy -eq 1 ]]; then
+            echo "  [PICK] src=$src skipped (busy in jobs)" >&2
+            continue
+        fi
 
         pick_result=$(pick_waiting)
         if [[ -z "$pick_result" ]]; then
-            # No more unpicked waiting nodes — either all assigned (still running)
-            # or genuinely empty. Don't break — continue to next source.
-            # But if waiting is empty, break after the for loop.
+            echo "  [PICK] no more waiting nodes left, continuing to next src=$src" >&2
             continue
         fi
         pick_idx=$(echo "$pick_result" | head -1)

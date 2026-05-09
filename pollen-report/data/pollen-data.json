@@ -1,64 +1,13 @@
 {
-  "timestamp": "2026-04-28T08:14:28.732782",
-  "location": "10625 Glass Mountain Trl, Austin TX 78750",
-  "gps": {
-    "source": "GPS (AccuWeather)",
-    "source_name": "pollencount.app (10625 Glass Mountain)",
-    "air_quality": 92,
-    "grass": 0,
-    "grass_category": "Low",
-    "mold": 3250,
-    "mold_category": "Low",
-    "ragweed": 5,
-    "ragweed_category": "Low",
-    "tree": 750,
-    "tree_category": "High",
-    "uv_index": 10,
-    "temp_high": 93,
-    "temp_low": 73,
-    "hours_of_sun": 4.5,
-    "forecast": [
-      {
-        "date": "2026-04-28",
-        "temp_high": 93,
-        "temp_low": 73,
-        "tree": 750,
-        "grass": 0
-      },
-      {
-        "date": "2026-04-29",
-        "temp_high": 79,
-        "temp_low": 65,
-        "tree": 413,
-        "grass": 0
-      },
-      {
-        "date": "2026-04-30",
-        "temp_high": 71,
-        "temp_low": 59,
-        "tree": 0,
-        "grass": 0
-      },
-      {
-        "date": "2026-05-01",
-        "temp_high": 67,
-        "temp_low": 51,
-        "tree": 0,
-        "grass": 0
-      },
-      {
-        "date": "2026-05-02",
-        "temp_high": 70,
-        "temp_low": 49,
-        "tree": 169,
-        "grass": 56
-      }
-    ]
-  },
+  "timestamp": "2026-05-09T07:00:32.388371",
+  "location": "Austin, Travis County",
+  "address": "Spicewood Elementary School, Austin TX 78750",
+  "lat": 30.4446283,
+  "lng": -97.8039171,
   "zip": {
     "source": "ZIP (pollen.com)",
-    "source_name": "pollen.com (Austin 78750)",
-    "overall_index": 7.1,
+    "source_name": "pollen.com (78750)",
+    "overall_index": 5.1,
     "overall_label": "medium",
     "top_allergens": [
       {
@@ -72,40 +21,90 @@
         "plantType": "Tree"
       },
       {
-        "name": "Oak",
-        "genus": "Quercus",
-        "plantType": "Tree"
+        "name": "Grasses",
+        "genus": "Grasses",
+        "plantType": "Grass"
       }
     ],
     "yesterday": {
-      "index": 8.6,
-      "label": "medium-high",
+      "index": 4.4,
+      "label": "low-medium",
       "names": [
         "Hickory",
         "Willow",
-        "Oak"
+        "Grasses"
       ]
     },
     "tomorrow": {
-      "index": 6,
+      "index": 5.8,
       "label": "medium",
       "names": [
         "Hickory",
         "Willow",
-        "Oak"
+        "Grasses"
       ]
-    },
-    "tree": null,
-    "grass": null,
-    "ragweed": null,
-    "mold": null
+    }
+  },
+  "gps": {
+    "source": "GPS (AccuWeather)",
+    "source_name": "Austin, Travis County",
+    "air_quality": 64,
+    "grass": 2,
+    "grass_category": "Low",
+    "mold": 3250,
+    "mold_category": "Low",
+    "ragweed": 30,
+    "ragweed_category": "Moderate",
+    "tree": 50,
+    "tree_category": "Moderate",
+    "uv_index": 10,
+    "temp_high": 93,
+    "temp_low": 69,
+    "hours_of_sun": 6.2,
+    "forecast": [
+      {
+        "date": "2026-05-09",
+        "temp_high": 93,
+        "temp_low": 69,
+        "tree": 50,
+        "grass": 2
+      },
+      {
+        "date": "2026-05-10",
+        "temp_high": 93,
+        "temp_low": 67,
+        "tree": 21,
+        "grass": 1
+      },
+      {
+        "date": "2026-05-11",
+        "temp_high": 79,
+        "temp_low": 63,
+        "tree": 62,
+        "grass": 17
+      },
+      {
+        "date": "2026-05-12",
+        "temp_high": 85,
+        "temp_low": 65,
+        "tree": 126,
+        "grass": 41
+      },
+      {
+        "date": "2026-05-13",
+        "temp_high": 87,
+        "temp_low": 65,
+        "tree": 394,
+        "grass": 131
+      }
+    ]
   },
   "aqi": {
-    "pm25": 68,
-    "aqi": 68,
+    "pm25": 55,
+    "aqi": 55,
     "source": "WAQI (World Air Quality Index)"
   },
   "top_allergen": "Tree",
-  "top_allergen_value": 750,
-  "top_allergen_category": "High"
+  "top_allergen_value": 50,
+  "top_allergen_category": "Moderate"
 }
