@@ -220,6 +220,13 @@ do_rsync() {
         return 0
     fi
 
+    # Pre-check: verify source directory exists on src node
+    if ! ssh $SSH_ARGS "$src" "test -d /mnt/data" 2>/dev/null; then
+        echo "  [!!] [$src] → [$tgt] /mnt/data/ does not exist on $src" >&2
+        echo "SRC DIR MISSING: $src:/mnt/data/" > /tmp/rsync-tree-abort
+        exit 1
+    fi
+
     # Run rsync ON the source node, pushing to target via ssh
     ssh $SSH_ARGS "$src" \
         "rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/" \
@@ -271,6 +278,9 @@ check_complete() {
                 echo "==============================================" >&2
                 echo "[II] writing abort marker" >&2
                 echo "RSYNC FAILED" > /tmp/rsync-tree-abort
+                sync
+                echo "[II] sync done, about to exit 1" >&2
+                exit 1
             fi
             # Success — fall through to size check below
         else
