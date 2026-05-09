@@ -144,7 +144,7 @@ trap cleanup EXIT
 SCRIPT_PID=$$
 
 # Nuclear cleanup
-rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* \
+rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock \
       /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock /tmp/rsync-tree-abort \
       /tmp/rsync-tree-diag.txt /tmp/rsync-diag-check.txt /tmp/rsync-*.log
 
@@ -382,6 +382,9 @@ print_summary() {
         echo "        and may be retried in subsequent runs."
     fi
 }
+
+# ---- Clean up stale locks/picked files from previous runs ----
+rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock
 
 # ---- Main loop ----
 iter=0
