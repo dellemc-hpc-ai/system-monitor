@@ -1,5 +1,10 @@
 [
   {
+    "hostname": "node009",
+    "gpu_type": "GB300",
+    "gpu_count": 4
+  },
+  {
     "hostname": "frank-XPS-8960",
     "gpu_type": "NVIDIA GPU",
     "gpu_count": 1
