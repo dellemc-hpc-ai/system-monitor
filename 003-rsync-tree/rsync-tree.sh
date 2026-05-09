@@ -306,6 +306,8 @@ check_complete() {
     # Process has exited — wait for it and get exit status (only ONE wait per pid!)
     local rsync_exit=0
     wait "$pid" || rsync_exit=$?
+    # DIAGNOSTIC: write directly to file so we always see this
+    echo "[DIAG] wait result for $src→$tgt pid=$pid: exit=$rsync_exit" >> /tmp/rsync-diag-check.txt
     echo "  [DD] [$src] → [$tgt] pid $pid exited with status $rsync_exit" >&2
 
     # Record exit status so subsequent iterations don't wait again
@@ -328,7 +330,8 @@ check_complete() {
         echo "------------------------------------------"
         echo "  Exit code: $rsync_exit"
         echo "=============================================="
-        echo "[II] writing abort marker (rsync exit)" > /tmp/rsync-tree-abort
+        printf 'ABORT|%s|%s|%d\n' "$src" "$tgt" "$rsync_exit" >> /tmp/rsync-tree-diag.txt
+        echo "RSYNC FAILED" > /tmp/rsync-tree-abort
         exit 1
     fi
 
@@ -450,6 +453,12 @@ while true; do
     n_active=${#jobs[@]}
     n_ready=${#ready[@]}
     n_waiting=${#waiting[@]}
+
+    echo "  [MAIN] jobs=${n_active} ready=${n_ready} waiting=${n_waiting}" >&2
+    for key in "${!jobs[@]}"; do
+        echo "  [MAIN]   ${key} => pid=${jobs[$key]}" >&2
+    done
+    echo "  [MAIN]   ready nodes: ${!ready[@]}" >&2
 
     if (( n_waiting == 0 && n_active == 0 )); then
         break
