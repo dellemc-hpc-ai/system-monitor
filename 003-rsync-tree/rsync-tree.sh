@@ -426,11 +426,14 @@ while true; do
 
         pick_result=$(pick_waiting)
         if [[ -z "$pick_result" ]]; then
-            break
+            # No more unpicked waiting nodes — either all assigned (still running)
+            # or genuinely empty. Don't break — continue to next source.
+            # But if waiting is empty, break after the for loop.
+            continue
         fi
         pick_idx=$(echo "$pick_result" | head -1)
         tgt=$(echo "$pick_result" | tail -1)
-        [[ -z "$tgt" ]] && break
+        [[ -z "$tgt" ]] && continue
 
         waiting=("${waiting[@]:0:$pick_idx}" "${waiting[@]:$((pick_idx + 1))}")
         unset "ready[$src]"
