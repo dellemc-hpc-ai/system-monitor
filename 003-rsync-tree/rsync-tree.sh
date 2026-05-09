@@ -238,11 +238,12 @@ check_complete() {
         local rsync_exit=$(cat "$checked")
         echo "  [DD] [$src] → [$tgt] already processed, exit=$rsync_exit" >&2
         if [[ $rsync_exit -ne 0 ]]; then
-            echo "  [!!] [$src] → [$tgt] rsync failed (exit=$rsync_exit) — skipping" >&2
+            echo "  [!!] [$src] → [$tgt] rsync failed (exit=$rsync_exit) — returning $tgt to queue, $src back to ready" >&2
             fail_job "$src→$tgt" "RSYNC_EXIT_$rsync_exit"
             unset "jobs[$src→$tgt]" 2>/dev/null
             rm -f "$pidfile"
             waiting=("$tgt" "${waiting[@]}")
+            ready["$src"]=1
             return 1
         fi
     else
@@ -266,10 +267,12 @@ check_complete() {
         rm -f "$pidfile"
 
         if [[ $rsync_exit -ne 0 ]]; then
-            echo "  [!!] [$src] → [$tgt] rsync failed with exit=$rsync_exit — returning $tgt to queue" >&2
+            echo "  [!!] [$src] → [$tgt] rsync failed with exit=$rsync_exit — returning $tgt to queue, $src back to ready" >&2
             fail_job "$src→$tgt" "RSYNC_EXIT_$rsync_exit"
             unset "jobs[$src→$tgt]" 2>/dev/null
+            rm -f "/tmp/rsync-tree-pid-$src→$tgt" "/tmp/rsync-tree-checked-$src→$tgt"
             waiting=("$tgt" "${waiting[@]}")
+            ready["$src"]=1
             return 1
         fi
     fi
@@ -278,28 +281,34 @@ check_complete() {
     local src_sz tgt_sz
     src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}')
     if [[ -z "$src_sz" ]]; then
-        echo "  [!!] [$src] → [$tgt] cannot get size from $src (SSH failed) — returning $tgt to queue" >&2
+        echo "  [!!] [$src] → [$tgt] cannot get size from $src (SSH failed) — returning $tgt to queue, $src back to ready" >&2
         fail_job "$src→$tgt" "SSH_FAIL_SRC"
         unset "jobs[$src→$tgt]" 2>/dev/null
+        rm -f "/tmp/rsync-tree-pid-$src→$tgt"
         waiting=("$tgt" "${waiting[@]}")
+        ready["$src"]=1
         return 1
     fi
     tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}')
     if [[ -z "$tgt_sz" ]]; then
-        echo "  [!!] [$src] → [$tgt] cannot get size from $tgt (SSH failed) — returning $tgt to queue" >&2
+        echo "  [!!] [$src] → [$tgt] cannot get size from $tgt (SSH failed) — returning $tgt to queue, $src back to ready" >&2
         fail_job "$src→$tgt" "SSH_FAIL_TGT"
         unset "jobs[$src→$tgt]" 2>/dev/null
+        rm -f "/tmp/rsync-tree-pid-$src→$tgt"
         waiting=("$tgt" "${waiting[@]}")
+        ready["$src"]=1
         return 1
     fi
 
     echo "  [DD] [$src] → [$tgt] size: src=$src_sz tgt=$tgt_sz" >&2
 
     if [[ "$src_sz" != "$tgt_sz" ]]; then
-        echo "  [!!] [$src] → [$tgt] SIZE MISMATCH: src=$src_sz tgt=$tgt_sz — returning $tgt to queue" >&2
+        echo "  [!!] [$src] → [$tgt] SIZE MISMATCH: src=$src_sz tgt=$tgt_sz — returning $tgt to queue, $src back to ready" >&2
         fail_job "$src→$tgt" "SIZE_MISMATCH_src=${src_sz}_tgt=${tgt_sz}"
         unset "jobs[$src→$tgt]" 2>/dev/null
+        rm -f "/tmp/rsync-tree-pid-$src→$tgt"
         waiting=("$tgt" "${waiting[@]}")
+        ready["$src"]=1
         return 1
     fi
 
