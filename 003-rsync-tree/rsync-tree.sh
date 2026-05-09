@@ -9,10 +9,10 @@
 # Usage:
 #   ./rsync-tree.sh --dry-run
 #   ./rsync-tree.sh --nodes 'node[01-18]'            # node001..node018 (default)
-#   ./rsync-tree.sh --nodes 'node0[01-18]'            # node001..node002 (explicit)
+#   ./rsync-tree.sh --nodes 'node0[01-18]'            # node001..node018 (explicit prefix)
 #   ./rsync-tree.sh --nodes 'compute[0-7]'            # compute0..compute7
 #   ./rsync-tree.sh --nodes 'n01,n02,n03,n04'        # explicit comma list
-#   ./rsync-tree.sh --nodes 'n[1..8]'                # n1..n8 (1 to 8)
+#   ./rsync-tree.sh --nodes 'n[1..8]'                # n1..n8 (plain range)
 #   ./rsync-tree.sh --source node12 --nodes 'node[01-18]'
 #=============================================================================
 
@@ -25,43 +25,28 @@ NODES_PATTERN='node[01-18]'
 DRY_RUN=""
 
 # ---- Pattern expander ----
-# Supports:
-#   node[01-18]   → node01, node02, ..., node18       (2-digit padding from "01")
-#   node0[01-18]  → node001, node002, ..., node018     (3-digit padding from "01")
-#   node[1-18]    → node01, node02, ..., node18       (max of start/end digit count)
-#   node[1..8]    → n1, n2, ..., n8                    (plain range, no zero-padding)
-#   compute[0-7]  → compute0, compute1, ..., compute7
-#   n01,n02,n03   → n01, n02, n03                      (comma-separated list)
-#   myhost        → myhost                             (literal single node)
 expand_nodes() {
     local pattern="$1"
     local result=""
 
-    # Comma-separated list — pass through as-is
     if [[ "$pattern" == *,* ]]; then
         echo "$pattern"
         return
     fi
 
-    # Bracket range: [X-Y] or [X..Y]
     if [[ "$pattern" =~ ^(.+)\[(.+)\]$ ]]; then
         local prefix="${BASH_REMATCH[1]}"
         local range="${BASH_REMATCH[2]}"
 
-        # Match start and end numbers, preserving any leading zeros
         if [[ "$range" =~ ^(0*[0-9]+)[\.\-]+(0*[0-9]+)$ ]]; then
             local start="${BASH_REMATCH[1]}"
             local end="${BASH_REMATCH[2]}"
-
-            # Padding width: if start has leading zeros, use that width;
-            # otherwise use the larger of start/end digit count
             local pad=0
             if [[ "$start" =~ ^0 ]]; then
                 pad=${#start}
             else
                 [[ ${#start} -gt ${#end} ]] && pad=${#start} || pad=${#end}
             fi
-
             for ((i=10#$start;i<=10#$end;i++)); do
                 [[ -n "$result" ]] && result="$result,"
                 result="$result$(printf "${prefix}%0*d" "$pad" "$i")"
@@ -71,7 +56,6 @@ expand_nodes() {
         fi
     fi
 
-    # No pattern recognized — literal single node
     echo "$pattern"
 }
 
@@ -86,7 +70,6 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Expand node pattern to comma-separated list
 NODE_LIST=$(expand_nodes "$NODES_PATTERN")
 IFS=',' read -ra ALL_NODES <<< "$NODE_LIST"
 
@@ -104,27 +87,36 @@ echo ""
 source_ok=0
 for n in "${ALL_NODES[@]}"; do
     [[ "$n" == "$SOURCE_NODE" ]] && source_ok=1 && break
-    done
+done
 if [[ $source_ok -eq 0 ]]; then
     echo "ERROR: source $SOURCE_NODE not found in node list"
     exit 1
 fi
 
 # ---- State ----
-# waiting[@]:  nodes still needing data
-# jobs[@]:     "src→tgt" → pid  (active rsync jobs, one entry per job)
-# ready[@]:    nodes that have data and are free to send
-
 declare -a waiting=()
 declare -A jobs=()    # "src→tgt" => pid
 declare -A ready=()
+declare -A failed_jobs=()  # "src→tgt" => reason
+declare -A failed_nodes=() # nodename => reason
+
+# ---- Failure helpers (do NOT exit — record only) ----
+fail_job() {
+    local key="$1"
+    local reason="$2"
+    failed_jobs["$key"]="$reason"
+}
+
+fail_node() {
+    local node="$1"
+    local reason="$2"
+    failed_nodes["$node"]="$reason"
+}
 
 # ---- Cleanup on exit ----
 cleanup() {
     echo ""
     echo "[cleanup] Cleaning up..."
-
-    # Kill all remaining rsync child processes
     if [[ ${#jobs[@]} -gt 0 ]]; then
         echo "[cleanup] Killing ${#jobs[@]} remaining rsync jobs..."
         for key in "${!jobs[@]}"; do
@@ -133,28 +125,28 @@ cleanup() {
             kill -9 "$pid" 2>/dev/null
         done
     fi
-
-    # Kill any stray rsync processes started by this script
-    # (they fork, so the direct child may not be the rsync process itself)
-    # Use the script's pid as the leader to find process group
     if [[ -n "${SCRIPT_PID:-}" ]]; then
         pkill -9 -P "$SCRIPT_PID" 2>/dev/null
     fi
-
-    # Remove all marker files
     echo "[cleanup] Removing marker files..."
     rm -f /tmp/rsync-tree-pid-* \
           /tmp/rsync-tree-checked-* \
           /tmp/rsync-tree-picked-* \
           /tmp/rsync-tree-done-* \
           /tmp/rsync-tree-wait.lock \
-          /tmp/rsync-tree-abort
-
+          /tmp/rsync-tree-abort \
+          /tmp/rsync-tree-diag.txt \
+          /tmp/rsync-diag-check.txt \
+          /tmp/rsync-*.log
     echo "[cleanup] Done."
 }
-
 trap cleanup EXIT
 SCRIPT_PID=$$
+
+# Nuclear cleanup
+rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* \
+      /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock /tmp/rsync-tree-abort \
+      /tmp/rsync-tree-diag.txt /tmp/rsync-diag-check.txt /tmp/rsync-*.log
 
 for n in "${ALL_NODES[@]}"; do
     if [[ "$n" == "$SOURCE_NODE" ]]; then
@@ -167,36 +159,19 @@ done
 echo "Initial: 1 source, ${#waiting[@]} need data"
 echo ""
 
-# DIAGNOSTIC: list ALL stale state before cleaning
-echo "[DIAG] === Pre-cleanup stale file scan ==="
-ls /tmp/rsync-tree-* 2>&1 | head -50
-echo "[DIAG] === Stale rsync processes ==="
-stale_pids=$(ps aux | grep '[r]sync' | grep -v grep | awk '{print $2, $11, $12, $13, $14, $15, $16}')
-echo "$stale_pids"
-echo "[DIAG] ==========================================="
-
-# Nuclear cleanup: remove ALL stale state from previous runs
-rm -f /tmp/rsync-tree-pid-* /tmp/rsync-tree-checked-* /tmp/rsync-tree-picked-* /tmp/rsync-tree-done-* /tmp/rsync-tree-wait.lock /tmp/rsync-tree-abort /tmp/rsync-tree-diag.txt /tmp/rsync-diag-check.txt
-
-# Also clean up stale log files from previous runs
-rm -f /tmp/rsync-*.log
-
-echo "[cleanup] Done. Running main loop..."
-echo ""
-
 LOGFILE="/tmp/rsync-tree.log"
 > "$LOGFILE"
 
 # ---- Helpers ----
 
 pick_waiting() {
-    # Returns: <idx>\n<node_name> for first unpicked waiting node.
-    # Marks node as picked atomically so subsequent calls skip it.
     local lock="/tmp/rsync-tree-wait.lock"
     while ! mkdir "$lock" 2>/dev/null; do sleep 0.05; done
 
     for ((i=0; i<${#waiting[@]}; i++)); do
-        [[ -f "/tmp/rsync-tree-picked-$i" ]] && continue
+        if [[ -f "/tmp/rsync-tree-picked-$i" ]]; then
+            continue
+        fi
         touch "/tmp/rsync-tree-picked-$i"
         rmdir "$lock"
         printf '%s\n%s' "$i" "${waiting[$i]}"
@@ -214,7 +189,6 @@ do_rsync() {
     if [[ -n "$DRY_RUN" ]]; then
         echo "  [$src] → [$tgt]  [DRY]"
         echo "[$src] → [$tgt] ✓" >> "$LOGFILE"
-        # Simulate rsync completion: background sleep then mark done
         (
             sleep 0.01
             > "/tmp/rsync-tree-done-$src→$tgt"
@@ -224,23 +198,26 @@ do_rsync() {
     fi
 
     # Pre-check: verify source directory exists on src node
-    if ! ssh $SSH_ARGS "$src" "test -d /mnt/data" 2>/dev/null; then
-        echo "  [!!] [$src] → [$tgt] /mnt/data/ does not exist on $src" >&2
-        echo "SRC DIR MISSING: $src:/mnt/data/" > /tmp/rsync-tree-abort
-        exit 1
+    if ! ssh $SSH_ARGS "$src" "test -d $SRC_DIR" 2>/dev/null; then
+        echo "  [!!] [$src] → [$tgt] $SRC_DIR/ does not exist on $src" >&2
+        fail_job "$src→$tgt" "SRC_DIR_MISSING"
+        fail_node "$src" "SRC_DIR_MISSING"
+        return 1
     fi
 
     # Run rsync ON the source node, pushing to target via ssh
     ssh $SSH_ARGS "$src" \
-        "rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/" \
+        "rsync -av --inplace $SRC_DIR/ ${tgt}:$SRC_DIR/" \
         &> "$log" &
 
     local pid=$!
     jobs["$src→$tgt"]=$pid
     echo "$pid" > "/tmp/rsync-tree-pid-$src→$tgt"
+    return 0
 }
 
-# check_complete src tgt — returns 0 and echos size if both sides match, 1 otherwise
+# check_complete src tgt — returns 0 on success, 1 if still running/failed
+# Does NOT exit — failures are recorded and the target is returned to waiting queue
 check_complete() {
     local src=$1 tgt=$2
     local log="/tmp/rsync-$src-$tgt.log"
@@ -254,117 +231,76 @@ check_complete() {
         return 1
     fi
 
-    # Job not started yet (no pidfile)
-    if [[ ! -f "$pidfile" ]]; then
-        # Check if we already processed this job and recorded an exit status
-        local checked="/tmp/rsync-tree-checked-$src→$tgt"
-        if [[ -f "$checked" ]]; then
-            local rsync_exit=$(cat "$checked")
-            echo "  [DD] [$src] → [$tgt] already waited, exit=$rsync_exit (from marker)" >&2
-            echo "  [DD]   [[ $rsync_exit -ne 0 ]] = $([[ $rsync_exit -ne 0 ]] && echo true || echo false)" >&2
-            # Still non-zero? fail and exit
-            if [[ $rsync_exit -ne 0 ]]; then
-                echo "" >&2
-                echo "==============================================" >&2
-                echo " RSYNC FAILED — aborting" >&2
-                echo "==============================================" >&2
-                echo "  Source : $src" >&2
-                echo "  Target : $tgt" >&2
-                echo "  Command: ssh $SSH_ARGS $src \\" >&2
-                echo "             \"rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/\"" >&2
-                echo "  Log    : $log" >&2
-                echo "" >&2
-                echo "--- rsync stdout/stderr ($log) ---" >&2
-                cat "$log" >&2
-                echo "------------------------------------------" >&2
-                echo "  Exit code: $rsync_exit" >&2
-                echo "==============================================" >&2
-                echo "[II] writing abort marker" >&2
-                echo "RSYNC FAILED" > /tmp/rsync-tree-abort
-                sync
-                echo "[II] sync done, about to exit 1" >&2
-                exit 1
-            fi
-            # Success — fall through to size check below
-        else
-            echo "  [??] [$src] → [$tgt] no pidfile, no checked marker — not started?" >&2
+    local checked="/tmp/rsync-tree-checked-$src→$tgt"
+
+    # Already processed?
+    if [[ -f "$checked" ]]; then
+        local rsync_exit=$(cat "$checked")
+        echo "  [DD] [$src] → [$tgt] already processed, exit=$rsync_exit" >&2
+        if [[ $rsync_exit -ne 0 ]]; then
+            echo "  [!!] [$src] → [$tgt] rsync failed (exit=$rsync_exit) — skipping" >&2
+            fail_job "$src→$tgt" "RSYNC_EXIT_$rsync_exit"
+            unset "jobs[$src→$tgt]" 2>/dev/null
+            rm -f "$pidfile"
+            waiting=("$tgt" "${waiting[@]}")
+            return 1
+        fi
+    else
+        if [[ ! -f "$pidfile" ]]; then
+            echo "  [??] [$src] → [$tgt] no pidfile yet" >&2
+            return 1
+        fi
+
+        local pid=$(cat "$pidfile")
+
+        if kill -0 "$pid" 2>/dev/null; then
+            echo "  [~~] [$src] → [$tgt] pid $pid still running" >&2
+            return 1
+        fi
+
+        local rsync_exit=0
+        wait "$pid" || rsync_exit=$?
+        echo "  [DD] [$src] → [$tgt] pid $pid exited, status=$rsync_exit" >&2
+
+        echo "$rsync_exit" > "$checked"
+        rm -f "$pidfile"
+
+        if [[ $rsync_exit -ne 0 ]]; then
+            echo "  [!!] [$src] → [$tgt] rsync failed with exit=$rsync_exit — returning $tgt to queue" >&2
+            fail_job "$src→$tgt" "RSYNC_EXIT_$rsync_exit"
+            unset "jobs[$src→$tgt]" 2>/dev/null
+            waiting=("$tgt" "${waiting[@]}")
             return 1
         fi
     fi
 
-    # pidfile must exist here — read it
-    if [[ ! -f "$pidfile" ]]; then
-        echo "  [!!] [$src] → [$tgt] pidfile gone unexpectedly!" >&2
+    # Size check
+    local src_sz tgt_sz
+    src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}')
+    if [[ -z "$src_sz" ]]; then
+        echo "  [!!] [$src] → [$tgt] cannot get size from $src (SSH failed) — returning $tgt to queue" >&2
+        fail_job "$src→$tgt" "SSH_FAIL_SRC"
+        unset "jobs[$src→$tgt]" 2>/dev/null
+        waiting=("$tgt" "${waiting[@]}")
         return 1
     fi
-    local pid=$(cat "$pidfile")
-    echo "  [DD] [$src] → [$tgt] pid=$pid" >&2
-
-    # Check if process still running
-    if kill -0 "$pid" 2>/dev/null; then
-        echo "  [~~] [$src] → [$tgt] pid $pid still running" >&2
-        return 1  # still running
+    tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}')
+    if [[ -z "$tgt_sz" ]]; then
+        echo "  [!!] [$src] → [$tgt] cannot get size from $tgt (SSH failed) — returning $tgt to queue" >&2
+        fail_job "$src→$tgt" "SSH_FAIL_TGT"
+        unset "jobs[$src→$tgt]" 2>/dev/null
+        waiting=("$tgt" "${waiting[@]}")
+        return 1
     fi
 
-    # Process has exited — wait for it and get exit status (only ONE wait per pid!)
-    local rsync_exit=0
-    wait "$pid" || rsync_exit=$?
-    # DIAGNOSTIC: write directly to file so we always see this
-    echo "[DIAG] wait result for $src→$tgt pid=$pid: exit=$rsync_exit" >> /tmp/rsync-diag-check.txt
-    echo "  [DD] [$src] → [$tgt] pid $pid exited with status $rsync_exit" >&2
-
-    # Record exit status so subsequent iterations don't wait again
-    echo "$rsync_exit" > "/tmp/rsync-tree-checked-$src→$tgt"
-    rm -f "$pidfile"
-
-    if [[ $rsync_exit -ne 0 ]]; then
-        echo ""
-        echo "=============================================="
-        echo " RSYNC FAILED — aborting"
-        echo "=============================================="
-        echo "  Source : $src"
-        echo "  Target : $tgt"
-        echo "  Command: ssh $SSH_ARGS $src \\"
-        echo "             \"rsync -av --inplace /mnt/data/ ${tgt}:/mnt/data/\""
-        echo "  Log    : $log"
-        echo ""
-        echo "--- rsync stdout/stderr ($log) ---"
-        cat "$log"
-        echo "------------------------------------------"
-        echo "  Exit code: $rsync_exit"
-        echo "=============================================="
-        printf 'ABORT|%s|%s|%d\n' "$src" "$tgt" "$rsync_exit" >> /tmp/rsync-tree-diag.txt
-        echo "RSYNC FAILED" > /tmp/rsync-tree-abort
-        exit 1
-    fi
-
-    # Verify both sides have same byte count
-    local src_sz tgt_sz
-    if ! src_sz=$(ssh $SSH_ARGS "$src" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}'); then
-        echo "  [!!] [$src] → [$tgt] cannot get size from $src" >&2
-        echo "SSH FAILED: $src" > /tmp/rsync-tree-abort
-        exit 1
-    fi
-    if ! tgt_sz=$(ssh $SSH_ARGS "$tgt" "du -sb $SRC_DIR" 2>/dev/null | awk '{print $1}'); then
-        echo "  [!!] [$src] → [$tgt] cannot get size from $tgt" >&2
-        echo "SSH FAILED: $tgt" > /tmp/rsync-tree-abort
-        exit 1
-    fi
-
-    echo "  [DD] [$src] → [$tgt] size check: src=$src_sz tgt=$tgt_sz" >&2
+    echo "  [DD] [$src] → [$tgt] size: src=$src_sz tgt=$tgt_sz" >&2
 
     if [[ "$src_sz" != "$tgt_sz" ]]; then
-        echo ""
-        echo "=============================================="
-        echo " SIZE MISMATCH — aborting"
-        echo "=============================================="
-        echo "  Job    : $src → $tgt"
-        echo "  Source : $src_sz bytes"
-        echo "  Target : $tgt_sz bytes"
-        echo "  Dir    : $SRC_DIR"
-        echo "=============================================="
-        echo "SIZE MISMATCH" > /tmp/rsync-tree-abort
-        exit 1
+        echo "  [!!] [$src] → [$tgt] SIZE MISMATCH: src=$src_sz tgt=$tgt_sz — returning $tgt to queue" >&2
+        fail_job "$src→$tgt" "SIZE_MISMATCH_src=${src_sz}_tgt=${tgt_sz}"
+        unset "jobs[$src→$tgt]" 2>/dev/null
+        waiting=("$tgt" "${waiting[@]}")
+        return 1
     fi
 
     echo "$src_sz"
@@ -372,67 +308,65 @@ check_complete() {
 }
 
 collect_ready() {
-    local new_nodes=""
-    declare -a newly_done=()
+    local newly_done=()
 
-    # Debug: dump current state to stderr
     echo "  [CR] collect_ready called: ${#jobs[@]} jobs, ${#ready[@]} ready, ${#waiting[@]} waiting" >&2
     for key in "${!jobs[@]}"; do
         echo "  [CR]   job: $key pid=${jobs[$key]}" >&2
     done
 
-    # Check each active job
     for key in "${!jobs[@]}"; do
-        local pid=${jobs[$key]}
         local src="${key%%→*}"
         local tgt="${key##*→}"
 
-        if [[ -n "$DRY_RUN" ]]; then
-            # In dry-run, check done marker file
-            if [[ -f "/tmp/rsync-tree-done-$src→$tgt" ]]; then
-                newly_done+=("$src" "$tgt" "$key")
-            fi
-        else
-            # In real mode, check_complete validates the job:
-            # - return 1  = job still running / not ready (skip for now)
-            # - exit 1    = hard failure (rsync failed / size mismatch)
-            #              -> terminates the entire script
-            # - returns 0 = job completed successfully
-            check_complete "$src" "$tgt"; cr=$?
-            if [[ $cr -eq 0 ]]; then
-                newly_done+=("$src" "$tgt" "$key")
-            fi
-            # if cr != 0 but didn't exit, job is still in progress — just skip
+        if check_complete "$src" "$tgt"; then
+            newly_done+=("$src" "$tgt" "$key")
         fi
     done
 
-    # Remove completed jobs from jobs[] and add nodes to ready[]
     declare -A seen=()
     for ((i=0; i<${#newly_done[@]}; i+=3)); do
         local src="${newly_done[$i]}"
         local tgt="${newly_done[$i+1]}"
         local key="${newly_done[$i+2]}"
-
         [[ -n "${seen[$key]:-}" ]] && continue
         seen[$key]=1
 
-        # Remove job
         unset "jobs[$key]" 2>/dev/null
-        rm -f "/tmp/rsync-tree-pid-$src→$tgt" "/tmp/rsync-tree-done-$src→$tgt"
+        rm -f "/tmp/rsync-tree-pid-$src→$tgt" \
+              "/tmp/rsync-tree-checked-$src→$tgt" \
+              "/tmp/rsync-tree-done-$src→$tgt"
 
-        # Mark both nodes as ready (source sent, target received)
         ready["$src"]=1
         ready["$tgt"]=1
-
-        # Remove from waiting if somehow still there (shouldn't happen)
-        # Both nodes now have data
-        new_nodes="$new_nodes $src $tgt"
+        echo "  → newly ready: $src $tgt  (${#ready[@]} sources total)" >&2
     done
+}
 
-    if [[ -n "$new_nodes" ]]; then
-        local n_ready=0
-        for r in "${!ready[@]}"; do ((n_ready++)); done 2>/dev/null
-        echo "  → newly ready:$new_nodes  ($n_ready sources total)"
+# ---- Print final summary ----
+print_summary() {
+    echo ""
+    echo "=============================================="
+    echo " SUMMARY"
+    echo "=============================================="
+
+    if [[ ${#failed_jobs[@]} -eq 0 ]] && [[ ${#failed_nodes[@]} -eq 0 ]]; then
+        echo "  All jobs completed successfully."
+    else
+        if [[ ${#failed_jobs[@]} -gt 0 ]]; then
+            echo "  Failed jobs:"
+            for key in "${!failed_jobs[@]}"; do
+                echo "    $key: ${failed_jobs[$key]}"
+            done
+        fi
+        if [[ ${#failed_nodes[@]} -gt 0 ]]; then
+            echo "  Failed/skipped nodes:"
+            for n in "${!failed_nodes[@]}"; do
+                echo "    $n: ${failed_nodes[$n]}"
+            done
+        fi
+        echo "  Note: failed targets have been returned to the waiting queue"
+        echo "        and may be retried in subsequent runs."
     fi
 }
 
@@ -443,20 +377,13 @@ while true; do
 
     collect_ready
 
-    # Check for abort marker — written by check_complete on hard failure
-    if [[ -f /tmp/rsync-tree-abort ]]; then
-        echo ""
-        echo "=============================================="
-        echo " SCRIPT ABORTING — see RSYNC FAILED details above"
-        echo "=============================================="
-        cat /tmp/rsync-tree-abort
-        exit 1
-    fi
-
     n_active=${#jobs[@]}
     n_ready=${#ready[@]}
     n_waiting=${#waiting[@]}
 
+    echo ""
+    echo "--- iter $iter: $n_active active, $n_waiting waiting, $n_ready free sources ---"
+    echo "  queue: ${waiting[@]}"
     echo "  [MAIN] jobs=${n_active} ready=${n_ready} waiting=${n_waiting}" >&2
     for key in "${!jobs[@]}"; do
         echo "  [MAIN]   ${key} => pid=${jobs[$key]}" >&2
@@ -469,30 +396,25 @@ while true; do
     fi
 
     if (( n_ready == 0 )); then
-        echo "--- iter $iter: $n_active active, $n_waiting waiting, no free sources — waiting..."
+        echo "  (no free sources, sleeping...)"
         sleep 1
         continue
     fi
 
     if (( n_waiting == 0 )); then
-        echo "--- iter $iter: $n_active active, all assigned — waiting for actives to finish..."
+        echo "  (all assigned, waiting for actives...)"
         sleep 1
         continue
     fi
 
-    echo "--- iter $iter: $n_active active, $n_waiting waiting, $n_ready free sources ---"
-    echo "  queue: ${waiting[@]}"
     started=0
-
     for src in "${!ready[@]}"; do
-        # Is this source already busy (has an active job as source)?
         is_busy=0
         for key in "${!jobs[@]}"; do
             [[ "${key%%→*}" == "$src" ]] && is_busy=1 && break
         done
         [[ $is_busy -eq 1 ]] && continue
 
-        # Pick a waiting node
         pick_result=$(pick_waiting)
         if [[ -z "$pick_result" ]]; then
             break
@@ -501,18 +423,14 @@ while true; do
         tgt=$(echo "$pick_result" | tail -1)
         [[ -z "$tgt" ]] && break
 
-        # Splice picked node out of waiting array
         waiting=("${waiting[@]:0:$pick_idx}" "${waiting[@]:$((pick_idx + 1))}")
-
-        # Remove source from ready (it's now busy)
         unset "ready[$src]"
 
-        # Start rsync
         do_rsync "$src" "$tgt"
         rs=$?
         echo "  [$src] → [$tgt]  started"
+
         if [[ $rs -ne 0 ]]; then
-            # Revert
             waiting=("$tgt" "${waiting[@]}")
             ready["$src"]=1
             unset "jobs[$src→$tgt]" 2>/dev/null
@@ -531,6 +449,8 @@ while true; do
         sleep 1
     fi
 done
+
+print_summary
 
 echo ""
 echo "=============================================="
