@@ -8,5 +8,10 @@
     "hostname": "mlperf1",
     "gpu_type": "NVIDIA GPU",
     "gpu_count": 8
+  },
+  {
+    "hostname": "node012",
+    "gpu_type": "GB300",
+    "gpu_count": 4
   }
 ]

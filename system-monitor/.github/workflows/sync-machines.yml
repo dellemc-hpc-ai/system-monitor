@@ -1,0 +1,48 @@
+name: Sync Machines
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'system-monitor/data/**'
+  pull_request:
+    paths:
+      - 'system-monitor/data/**'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: system-monitor
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install deps
+        run: pip install --upgrade pip
+
+      - name: Pull latest
+        run: git pull origin main
+
+      - name: Run sync script
+        run: python3 sync_machines.py
+
+      - name: Commit and push
+        run: |
+          if [ -n "$(git diff machines.json)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add machines.json
+            git commit -m "ci: sync machines.json $(date '+%Y-%m-%d %H:%M')"
+            git push
+          else
+            echo "No changes to machines.json"
+          fi

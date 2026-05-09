@@ -11,8 +11,8 @@ for fname in os.listdir(DATA_DIR):
         if hostname not in seen:
             with open(DATA_DIR / fname) as f:
                 r = json.loads(f.readline())
-                gpu = r.get('gpu', [])
-                has_gpu = bool(gpu) and not (isinstance(gpu, list) and gpu and gpu[0].get('error'))
+                gpu = r.get('gpu')
+                has_gpu = gpu and isinstance(gpu, list) and len(gpu) > 0 and not (isinstance(gpu[0], dict) and gpu[0].get('error'))
                 seen[hostname] = {
                     'hostname': hostname,
                     'gpu_type': r.get('gpu_type') or ('NVIDIA GPU' if has_gpu else None),
@@ -20,4 +20,4 @@ for fname in os.listdir(DATA_DIR):
                 }
 with open('/home/frank/hermes/system-monitor/machines.json', 'w') as f:
     json.dump(list(seen.values()), f, indent=2)
-print('Generated machines.json with', len(seen), 'machines')
+print('machines.json updated')
