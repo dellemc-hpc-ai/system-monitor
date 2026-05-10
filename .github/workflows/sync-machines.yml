@@ -26,9 +26,6 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install deps
-        run: pip install --upgrade pip
-
       - name: Pull latest
         run: git pull origin main
 
