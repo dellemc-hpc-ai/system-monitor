@@ -435,6 +435,7 @@ def collect(enable_nvlink=True):
     stats = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "hostname": HOSTNAME,
+        "display_name": display_name,
         "gpu_count": GPU_COUNT,
         "gpu_type": GPU_TYPE,
         "cpu_percent": cpu_percent,
@@ -460,9 +461,12 @@ def append_to_file(data, period):
         f.write(json.dumps(data) + "\n")
 
 
-def daemon(interval=10):
+def daemon(interval=10, display_name=None):
     gpu_label = f"{GPU_COUNT}x GPU" if GPU_COUNT else "no GPU"
     enable_nvlink = (interval >= 10)
+    shown_name = display_name or HOSTNAME
+    if display_name:
+        print(f"  Display name: [{display_name}]  (hostname: [{HOSTNAME}])")
     if interval < 10:
         print("\n" + "=" * 60)
         print("\033[91m  WARNING: NVLink/PCIe monitoring will NOT start\033[0m")
@@ -509,4 +513,5 @@ def daemon(interval=10):
 if __name__ == "__main__":
     import sys
     interval = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-    daemon(interval)
+    display_name = sys.argv[2] if len(sys.argv) > 2 else None
+    daemon(interval, display_name=display_name)

@@ -379,7 +379,8 @@ async function loadMachines() {
       const gpuDesc = m.gpu_count > 0
         ? ` (${m.gpu_type || 'GPU'} x${m.gpu_count})`
         : ' (no GPU)';
-      opt.textContent = m.hostname + gpuDesc;
+      const shownName = m.display_name || m.hostname;
+      opt.textContent = shownName + gpuDesc;
       sel.appendChild(opt);
     });
     sel.value = machines[0].hostname;

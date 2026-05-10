@@ -1,21 +1,25 @@
 [
   {
     "hostname": "node009",
+    "display_name": null,
     "gpu_type": "GB300",
     "gpu_count": 4
   },
   {
     "hostname": "frank-XPS-8960",
+    "display_name": null,
     "gpu_type": "NVIDIA GPU",
     "gpu_count": 1
   },
   {
     "hostname": "mlperf1",
+    "display_name": null,
     "gpu_type": "NVIDIA GPU",
     "gpu_count": 8
   },
   {
     "hostname": "node012",
+    "display_name": null,
     "gpu_type": "GB300",
     "gpu_count": 4
   }

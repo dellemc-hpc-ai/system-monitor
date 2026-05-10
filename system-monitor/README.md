@@ -69,9 +69,9 @@ pip install psutil
 
 ```bash
 # Run once to test (interval in seconds):
-python3 collector.py --interval 10   # 10-second interval — PCIe/NVLink ENABLED
-python3 collector.py --interval 5    # 5-second interval — PCIe/NVLink DISABLED (red WARNING shown)
-python3 collector.py --interval 1    # 1-second interval — PCIe/NVLink DISABLED (high-frequency)
+python3 collector.py --interval 10                 # PCIe/NVLink enabled
+python3 collector.py --interval 10 "XE9680-006"    # with custom display name
+python3 collector.py --interval 5                  # PCIe/NVLink disabled (red WARNING)
 
 # Or install as a systemd service (auto-starts on boot):
 sudo cp system-monitor.service /etc/systemd/system/
@@ -80,6 +80,19 @@ sudo systemctl enable --now system-monitor
 ```
 
 > **Important**: PCIe/NVLink metrics are only collected when `interval >= 10s`. Smaller intervals print a red WARNING and skip these metrics.
+
+### 2b. Custom display name
+
+By default the dashboard shows the machine's hostname. If the hostname is opaque or changes, pass a second argument to set a persistent display name shown in the UI:
+
+```bash
+python3 collector.py --interval 10 "XE9680-006"
+```
+
+Usage: `python3 collector.py <interval> [display_name]`
+
+- No display_name → shows hostname as-is (e.g. `node012`)
+- With display_name → shows your label instead (e.g. `XE9680-006 (GB300 x4)`)
 
 ### 3. (Optional) Run a local HTTP server for development
 
@@ -118,6 +131,7 @@ Each line in `data/metrics_<hostname>_<YYYYMMDD>.json`:
 |-------|------|-------------|
 | `timestamp` | string (ISO 8601 UTC) | When the sample was taken |
 | `hostname` | string | Machine hostname |
+| `display_name` | string or null | Optional display name for the dashboard UI; null to use hostname |
 | `gpu_count` | integer | Number of GPUs on this machine (0–8) |
 | `gpu_type` | string or null | GPU model name (e.g. "NVIDIA H100 80GB") |
 | `cpu_percent` | float | CPU utilization % (0–100) |
