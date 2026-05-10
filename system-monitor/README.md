@@ -1,19 +1,35 @@
 # System Monitor
 
-**Multi-machine GPU server monitoring dashboard.** Collects CPU, memory, and per-GPU metrics from one or more servers and displays them in a browser via [GitHub Pages](https://hanyunfan.github.io/hermes/system-monitor/).
+**Multi-machine GPU server monitoring dashboard.** Collects CPU, memory, GPU, power, and network metrics from one or more servers and displays them in a browser via [GitHub Pages](https://hanyunfan.github.io/hermes/system-monitor/).
 
 ```
 ┌─────────────┐         ┌─────────────────────────┐         ┌──────────────────┐
 │  Machines   │  cron   │   GitHub Repository    │  Pages  │   Browser        │
 │  running    │────────▶│   (hermes repo)         │───────▶│   Dashboard      │
-│  collector  │  hourly │   data/                 │ static  │   chart.js       │
-│  (daemon)   │         │   index.html            │  host   │                  │
+│  collector  │  hourly │   data/                 │ static  │   Chart.js SPA   │
+│  (daemon)   │         │   machines.json         │  host   │                  │
 └─────────────┘         └─────────────────────────┘         └──────────────────┘
 ```
 
-## Architecture
+## Features
 
-The system has three layers:
+| Metric | Source | Notes |
+|--------|--------|-------|
+| CPU % | `psutil` | Per-core aggregate |
+| Memory used/total | `psutil` | System RAM |
+| GPU utilization, memory | `nvidia-smi` | Up to 8 GPUs per machine |
+| GPU power draw | `nvidia-smi` | Per-GPU watts + TDP limit |
+| PCIe RX/TX throughput | `nvidia-smi dmon` | GPU0 only; requires `interval >= 10s` |
+| NVLink RX/TX throughput | `nvidia-smi dmon` | GPU0 only; requires `interval >= 10s` |
+| Network throughput | `psutil` | Per interface (e.g. eth0, ib0) |
+| System power (whole-machine) | `ipmitool dcmi` | BMC-based; requires `ipmitool` + BMC access |
+| CPU power (package) | `intel_rapl` | RAPL CPU package power |
+
+> **PCIe/NVLink**: These metrics use `nvidia-smi dmon` which needs ~3–4 seconds of sampling to produce valid numbers. The collector therefore only enables them when `interval >= 10s`. If you start with a smaller interval, a red WARNING is printed and these fields will be absent from the JSON.
+
+> **System power**: Requires `ipmitool` command to be installed and the BMC (Baseboard Management Controller) to have `DCMI power reading` permission. If unavailable, `system_power_w` is `null`.
+
+## Architecture
 
 ### 1. Collector (`collector.py`) — runs on every machine
 A Python daemon that samples metrics every N seconds and **appends** JSON Lines to a local file.
@@ -26,8 +42,8 @@ A Python daemon that samples metrics every N seconds and **appends** JSON Lines 
 ### 2. GitHub Repository — stores and distributes data
 A GitHub repo holds all data files and the static web dashboard.
 
-- **Hourly sync cron job** (`system-monitor-data-sync`) pulls latest data from each machine, commits, and pushes to GitHub
-- **`machines.json`** — regenerated from data files; lists all discovered machines, GPU types, and GPU counts
+- **`machines.json`** — regenerated from data files by `sync_machines.py`; lists all discovered machines, GPU types, and GPU counts
+- **GitHub Actions** (`.github/workflows/sync-machines.yml` at repo root) — automatically runs `sync_machines.py` and pushes updated `machines.json` whenever a new data file is pushed to `system-monitor/data/`
 - **GitHub Pages** — serves the `index.html` and `data/` directory as a static site
 
 ### 3. Dashboard (`index.html`) — browser UI
@@ -36,6 +52,8 @@ Chart.js-powered SPA served directly from GitHub Pages.
 - **Range selector**: Hour / Day / Week — controls the time window
 - **Machine selector**: switch between machines
 - **Per-GPU charts**: each GPU gets its own colored line
+- **PCIe/NVLink chart**: GPU0 PCIe RX/TX + NVLink RX/TX (hidden if no data)
+- **Power chart**: per-GPU watts + system power (BMC) + CPU power (RAPL)
 - **Aggregate stats**: mean CPU %, mean GPU utilization, total GPU memory
 - **Auto-refresh**: polls every 10 seconds
 
@@ -50,16 +68,18 @@ pip install psutil
 ### 2. Start the collector
 
 ```bash
-# Run once to test (interval in seconds, default is 10):
-python3 collector.py 10   # 10-second interval
-python3 collector.py 5    # 5-second interval
-python3 collector.py 1    # 1-second interval (high-frequency, large data files)
+# Run once to test (interval in seconds):
+python3 collector.py --interval 10   # 10-second interval — PCIe/NVLink ENABLED
+python3 collector.py --interval 5    # 5-second interval — PCIe/NVLink DISABLED (red WARNING shown)
+python3 collector.py --interval 1    # 1-second interval — PCIe/NVLink DISABLED (high-frequency)
 
 # Or install as a systemd service (auto-starts on boot):
 sudo cp system-monitor.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now system-monitor
 ```
+
+> **Important**: PCIe/NVLink metrics are only collected when `interval >= 10s`. Smaller intervals print a red WARNING and skip these metrics.
 
 ### 3. (Optional) Run a local HTTP server for development
 
@@ -68,56 +88,27 @@ python3 server.py
 # → http://localhost:8765
 ```
 
-### 4. Set up GitHub Pages sync
+### 4. Optional: system power via ipmitool
 
-The cron job `system-monitor-data-sync` runs hourly on the machine that hosts the git repo. It:
-
-1. Pulls latest `main`
-2. Regenerates `machines.json` from data files
-3. Commits and pushes any new data
-4. GitHub Pages automatically rebuilds and serves the updated `data/` files
-
-To manually sync once:
+If `ipmitool` is installed and the BMC has DCMI permission, whole-machine AC power is collected automatically:
 
 ```bash
-cd /home/frank/hermes/system-monitor
-git pull origin main
-python3 regen_machines.py
-git add data/ machines.json
-git commit -m "data: sync $(date '+%Y-%m-%d %H:%M')"
-git push origin main
+# Test BMC access:
+ipmitool dcmi power reading
+
+# Expected output:
+#   Instantaneous power reading:           1234 W
 ```
 
-## Multi-Machine, Multi-GPU
+If the command fails or times out, `system_power_w` will be `null` in the JSON (no error is printed).
 
-**Multiple machines**: each machine runs its own `collector.py` daemon. Each daemon writes to its own `data/metrics_<hostname>_*.json` file. The hourly sync job finds all unique hostnames and updates `machines.json` automatically.
+## GitHub Pages URL
 
-**Up to 8 GPUs per machine**: the collector queries each GPU individually via `nvidia-smi --id=N` and stores an array:
-
-```json
-{
-  "timestamp": "2026-05-06T00:00:06.481306+00:00",
-  "hostname": "gpu-server-1",
-  "gpu_count": 4,
-  "gpu_type": "NVIDIA H100 80GB",
-  "cpu_percent": 45.2,
-  "memory_percent": 67.8,
-  "memory_used_mb": 52340.5,
-  "memory_total_mb": 1048576.0,
-  "gpu": [
-    { "id": 0, "utilization": 98.0, "memory_used_mb": 76000.0, "memory_total_mb": 81920.0,
-      "rxpci_mbs": 123.4, "txpci_mbs": 456.7, "nvlrx_mbs": 1024.5, "nvltx_mbs": 1024.5 },
-    { "id": 1, "utilization": 97.5, "memory_used_mb": 74000.0, "memory_total_mb": 81920.0,
-      "rxpci_mbs": 98.2, "txpci_mbs": 401.1, "nvlrx_mbs": 1024.5, "nvltx_mbs": 1024.5 },
-    { "id": 2, "utilization": 0.0,  "memory_used_mb": 200.0,  "memory_total_mb": 81920.0,
-      "rxpci_mbs": 0.0, "txpci_mbs": 0.0, "nvlrx_mbs": null, "nvltx_mbs": null },
-    { "id": 3, "utilization": 0.0,  "memory_used_mb": 200.0,  "memory_total_mb": 81920.0,
-      "rxpci_mbs": 0.0, "txpci_mbs": 0.0, "nvlrx_mbs": null, "nvltx_mbs": null }
-  ]
-}
+```
+https://hanyunfan.github.io/hermes/system-monitor/
 ```
 
-The dashboard shows **one line per GPU** on the GPU charts, with a legend. Aggregate stats (e.g. "GPU Utilization: 74%") show the **mean** across all GPUs; GPU Memory shows the **total** across all GPUs.
+The dashboard is a pure static SPA — no server-side logic, no authentication. Anyone with the link can view it.
 
 ## Data Format
 
@@ -134,7 +125,8 @@ Each line in `data/metrics_<hostname>_<YYYYMMDD>.json`:
 | `memory_used_mb` | float | System RAM used (MB) |
 | `memory_total_mb` | float | System RAM total (MB) |
 | `network` | array | Per-interface network throughput (see below) |
-| `system_power_w` | float or null | Whole-machine power (W) via BMC/ipmitool or RAPL; null if unavailable |
+| `system_power_w` | float or null | Whole-machine power (W) via BMC/ipmitool; null if unavailable |
+| `cpu_power_w` | float or null | CPU package power (W) via RAPL; null if unavailable |
 | `gpu_power` | array or null | Per-GPU power draw (see below); null if no GPU |
 | `gpu` | array or null | Per-GPU stats (see below); null if no GPU |
 
@@ -162,10 +154,10 @@ Each line in `data/metrics_<hostname>_<YYYYMMDD>.json`:
 | `utilization` | float | GPU utilization % (0–100) |
 | `memory_used_mb` | float | GPU memory used (MB) |
 | `memory_total_mb` | float | GPU memory total (MB) |
-| `rxpci_mbs` | float or null | PCIe RX throughput (MB/s); null if N/A (e.g. consumer GPU) |
-| `txpci_mbs` | float or null | PCIe TX throughput (MB/s); null if N/A |
-| `nvlrx_mbs` | float or null | NVLink RX throughput (MiB/s); null if no NVLink |
-| `nvltx_mbs` | float or null | NVLink TX throughput (MiB/s); null if no NVLink |
+| `rxpci_mbs` | float or null | PCIe RX throughput (MB/s); null if N/A or interval < 10s |
+| `txpci_mbs` | float or null | PCIe TX throughput (MB/s); null if N/A or interval < 10s |
+| `nvlrx_mbs` | float or null | NVLink RX throughput (MB/s); null if no NVLink or interval < 10s |
+| `nvltx_mbs` | float or null | NVLink TX throughput (MB/s); null if no NVLink or interval < 10s |
 | `error` | string | Present if nvidia-smi query failed |
 
 ## Project Files
@@ -175,25 +167,22 @@ Each line in `data/metrics_<hostname>_<YYYYMMDD>.json`:
 | `collector.py` | Daemon — samples and writes metrics to `data/` |
 | `index.html` | Dashboard — Chart.js SPA served via GitHub Pages |
 | `server.py` | Optional local HTTP server (dev only, port 8765) |
-| `regen_machines.py` | Rebuilds `machines.json` from data files |
+| `sync_machines.py` | Syncs `machines.json` from data files (used by GitHub Actions) |
 | `machines.json` | Auto-generated list of machines and GPU counts |
 | `system-monitor.service` | systemd unit for auto-start |
+| `.github/workflows/sync-machines.yml` | GitHub Actions: auto-syncs machines.json on data changes |
 | `data/` | JSON Lines data files (one per machine per UTC date) |
-
-## GitHub Pages URL
-
-```
-https://hanyunfan.github.io/hermes/system-monitor/
-```
-
-The dashboard is a pure static SPA — no server-side logic, no authentication. Anyone with the link can view it.
 
 ## Troubleshooting
 
-**"No data for this range"**: Check that the collector daemon is running (`ps aux | grep collector`), and that the hourly sync cron job has pushed latest data to GitHub.
+**"No data for this range"**: Check that the collector daemon is running (`ps aux | grep collector`), and that data has been pushed to GitHub.
 
-**GPU charts show "N/A"**: The `machines.json` may have stale `gpu_count=0`. Run `python3 regen_machines.py` to rebuild it from the latest data files.
+**GPU charts show "N/A"**: The `machines.json` may be stale. Push a new data file — GitHub Actions will automatically regenerate `machines.json`. Or manually run `python3 sync_machines.py`.
 
 **Old data in browser**: GitHub Pages can cache aggressively. Hard-refresh with `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac), or open DevTools → Network → disable cache.
+
+**PCIe/NVLink chart shows no data**: This is expected if the collector was started with `interval < 10s`. Restart with `python3 collector.py --interval 10`. The red WARNING message confirms this.
+
+**system_power_w is null**: Confirm `ipmitool dcmi power reading` works on that machine and that the BMC has DCMI permissions.
 
 **Multiple collectors on same machine**: Only one collector per hostname should run, otherwise data files will interleave and corrupt each other.
