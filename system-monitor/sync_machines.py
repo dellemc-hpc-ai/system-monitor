@@ -19,6 +19,6 @@ for fname in os.listdir(DATA_DIR):
                     'gpu_type': r.get('gpu_type') or ('NVIDIA GPU' if has_gpu else None),
                     'gpu_count': r.get('gpu_count', 0) or (1 if has_gpu else 0)
                 }
-with open('/home/frank/hermes/system-monitor/machines.json', 'w') as f:
+with open(Path(__file__).parent / 'machines.json', 'w') as f:
     json.dump(list(seen.values()), f, indent=2)
 print('machines.json updated')
