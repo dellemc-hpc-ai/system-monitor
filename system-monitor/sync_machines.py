@@ -4,10 +4,11 @@ from pathlib import Path
 DATA_DIR = Path(__file__).parent / 'data'
 pattern = re.compile(r'^metrics_(.+)_(\d{8})\.json$')
 seen = {}
-for fname in os.listdir(DATA_DIR):
+files = sorted(os.listdir(DATA_DIR), reverse=True)
+for fname in files:
     m = pattern.match(fname)
     if m:
-        hostname = m.group(1)
+        hostname, datestr = m.group(1), m.group(2)
         if hostname not in seen:
             with open(DATA_DIR / fname) as f:
                 r = json.loads(f.readline())
