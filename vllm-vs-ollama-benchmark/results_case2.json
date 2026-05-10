@@ -1,9 +1,0 @@
-{
-  "case": "vllm_fp8",
-  "results": [
-    {"io_key":"trans","io_name":"Translation (400/400)","cold_lat":2926.0,"cold_tp":23.4,"cached_lat":3296.0,"cached_tp":23.4,"steady_lat":3124.0,"steady_tp":23.4,"gpu_mem":19158.0},
-    {"io_key":"gen","io_name":"Generation (200/2000)","cold_lat":12872.0,"cold_tp":23.3,"cached_lat":21101.0,"cached_tp":11.7,"steady_lat":28886.0,"steady_tp":9.0,"gpu_mem":19158.0},
-    {"io_key":"summ","io_name":"Summarization (2000/200)","cold_lat":11885.0,"cold_tp":10.8,"cached_lat":14642.0,"cached_tp":8.8,"steady_lat":14631.0,"steady_tp":8.7,"gpu_mem":19158.0}
-  ],
-  "ts": "2026-05-02T10:00:00"
-}

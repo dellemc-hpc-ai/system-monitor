@@ -1,9 +1,0 @@
-{
-  "case": "ollama",
-  "results": [
-    {"io_key":"trans","io_name":"Translation (400/400)","cold_lat":3894.0,"cold_tp":18.1,"cached_lat":5190.0,"cached_tp":9.2,"steady_lat":7430.0,"steady_tp":9.2,"gpu_mem":5456.0},
-    {"io_key":"gen","io_name":"Generation (200/2000)","cold_lat":33121.0,"cold_tp":5.6,"cached_lat":36028.0,"cached_tp":5.5,"steady_lat":36485.0,"steady_tp":5.5,"gpu_mem":5456.0},
-    {"io_key":"summ","io_name":"Summarization (2000/200)","cold_lat":21366.0,"cold_tp":5.5,"cached_lat":21856.0,"cached_tp":5.5,"steady_lat":22714.0,"steady_tp":5.5,"gpu_mem":5456.0}
-  ],
-  "ts": "2026-05-02T10:45:00"
-}
