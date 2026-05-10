@@ -174,7 +174,7 @@ pick_waiting() {
         local node="${waiting[$i]}"
         local picked_file="/tmp/rsync-tree-picked-$SCRIPT_RUN_ID-$node"
         if [[ -f "$picked_file" ]]; then
-            echo "  [PICK]   [$i] $node SKIP (picked file exists)" >&2
+            echo "  [PICK]   [$i] $node SKIP (picked file exists: $picked_file)" >&2
             continue
         fi
         touch "$picked_file"
