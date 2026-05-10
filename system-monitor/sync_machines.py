@@ -1,7 +1,7 @@
 import json, os, re
 from pathlib import Path
 
-DATA_DIR = Path('/home/frank/hermes/system-monitor/data')
+DATA_DIR = Path(__file__).parent / 'data'
 pattern = re.compile(r'^metrics_(.+)_(\d{8})\.json$')
 seen = {}
 for fname in os.listdir(DATA_DIR):
